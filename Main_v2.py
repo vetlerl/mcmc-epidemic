@@ -32,8 +32,6 @@ def BuildA(Delta,Vt):
 #sh
 def Buildsh(T,a,b):
     sh = np.zeros(T)
-    a = 1
-    b = 2
     sh[0] = (a-2*b)/4
     sh[1] = b/2
     return sh
@@ -41,7 +39,7 @@ def Buildsh(T,a,b):
 #Simulation of a n-sample of Y
 def Computation_Y(T, Lambda):
 
-    D=BuildD(T)
+    D = BuildD(T)
     
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
@@ -62,11 +60,11 @@ def Computation_Y(T, Lambda):
 
 #Compute argmax of pi and pi_tilde distributions
 def ComputeArgmax(T,Lambda):
-    D=BuildD(T)
+    D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y=Computation_Y(T, Lambda)
+    Y = Computation_Y(T, Lambda)
     
     u=U@Y+sh
     x_tilde=np.sign(u)*np.maximum(np.abs(u)-Lambda,np.zeros(T))-sh
@@ -74,14 +72,16 @@ def ComputeArgmax(T,Lambda):
     return x,x_tilde
 
 def ComputeMeans(T, Lambda):
-    D=BuildD(T)
+    D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y=Computation_Y(T, Lambda)
+    Y = Computation_Y(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
-    C_plus = scipy.stats.norm.ppf(-sh-mu_plus)
+    #assert ((0 <= -sh-mu_plus) & (-sh-mu_plus <= 1)).all()
+    C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
     mu_minus = U @ Y - Lambda*np.ones(T)
-    C_minus = 1 - scipy.stats.norm.ppf(-sh-mu_minus)
+    #assert ((0 <= -sh-mu_minus) & (-sh-mu_minus <= 1)).all()
+    C_minus = 1 - scipy.stats.norm.cdf(-sh-mu_minus)
     gamma = C_plus / (C_plus + C_minus)
     mu_tilde_plus = mu_plus - np.exp(-((sh+mu_plus)**2)/2) / (np.sqrt(2*np.pi)*C_plus)
     mu_tilde_minus = mu_minus + np.exp(-((sh+mu_minus)**2)/2) / (np.sqrt(2*np.pi)*C_minus)
@@ -90,45 +90,83 @@ def ComputeMeans(T, Lambda):
     return mu, mu_tilde
 
 def ComputeQuantiles(T, Lambda, s):
-    D=BuildD(T)
+    D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y=Computation_Y(T, Lambda)
+    Y = Computation_Y(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
-    C_plus = scipy.stats.norm.ppf(-sh-mu_plus)
+    C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
     mu_minus = U @ Y - Lambda*np.ones(T)
-    C_minus = 1 - scipy.stats.norm.ppf(-sh-mu_minus)
+    C_minus = 1 - scipy.stats.norm.cdf(-sh-mu_minus)
     gamma = C_plus / (C_plus + C_minus)
     probas = np.zeros(T)
     q_plus = np.zeros(T)
     q_minus = np.zeros(T)
     for i in range(T):
-        q_plus[i] = scipy.stats.norm.ppf(min(s[i]-mu_plus[i], -sh[i]-mu_plus[i])) / C_plus[i]
+        q_plus[i] = scipy.stats.norm.cdf(min(s[i]-mu_plus[i], -sh[i]-mu_plus[i])) / C_plus[i]
         if(s[i]>-sh[i]):
-            q_minus[i] = (scipy.stats.norm.ppf(s[i]-mu_minus[i]) + C_minus[i] - 1) / C_minus[i]
+            q_minus[i] = (scipy.stats.norm.cdf(s[i]-mu_minus[i]) + C_minus[i] - 1) / C_minus[i]
         probas[i] = gamma[i]*q_plus[i] + (1 - gamma[i])*q_minus[i]
     return probas
 
 def DistributionPi(x, Y, A, D, sh, Lambda):
-    return np.exp(((-1/2)*np.linalg.norm(Y - A@x)**2)-Lambda*sum(abs(D@x + sh)))
+    return np.exp(((-1/2)*np.linalg.norm(Y - A@x)**2)-Lambda*np.linalg.norm(D@x + sh,ord=1))
 
-def MetropolisHastingsMean(T, Lambda):
-    D=BuildD(T)
-    gamma_zero = 0.01
+def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
+    D = BuildD(T)
+    gamma = 0.01
+    gamma_final = 0.24
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y=Computation_Y(T, Lambda)
+    Y = Computation_Y(T, Lambda)
     theta = np.ones(T) # maybe choose another starting point
-    sum_theta = theta
-    for i in range(10000):
-        new_theta = np.random.multivariate_normal(theta, gamma_zero*np.identity(T))
-        alpha = DistributionPi(new_theta, Y, A, D, sh, Lambda)*scipy.stats.norm.pdf()
+    acceptance_cnt = 0
+    
+    for i in range(int(niter)):
+        candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
+        alpha = DistributionPi(candidate, Y, A, D, sh, Lambda)/DistributionPi(theta, Y, A, D, sh, Lambda)
+        if alpha >=1 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            tmp = np.random.uniform()
+            if tmp <= alpha: # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+        # burn-in
+        if i+1 % 1000 == 0 : # every 1000th iteration
+            gamma = gamma + (acceptance_cnt/(i+1) - gamma_final)*gamma
+    
+    return theta
     
 #Test of the different functions 
-D=BuildD(20)
+T = 20
+Lambda = 1
+
+D = BuildD(T)
 U, Delta, Vt = BuildUVDelta(D)
 A = BuildA(Delta, Vt)
 
-sh = Buildsh(4, a, b)
-x1,x2=ComputeArgmax(20,1)
+sh = Buildsh(T, a, b)
+x,x_tilde = ComputeArgmax(T,Lambda)
+mu,mu_tilde = ComputeMeans(T,Lambda)
+q = ComputeQuantiles(T,Lambda,0.995*np.ones(20))
+Moy = MetropolisHastingsMean(T,Lambda,niter=1e4)
+
+print(f"We test our functions for T={T} and Lambda={Lambda}")
+print("------- variables -------")
+print(f"D = {D}")
+print(f"A = {A}")
+print(f"sh = {sh}")
+print("------- functions -------")
+print(" * ComputeArgmax: ")
+print(f"x_tilde = {x_tilde}")
+print(f"x = {x}")
+print(" * ComputeMeans: ")
+print(f"mu = {mu}")
+print(f"mu_tilde = {mu_tilde}")
+print(" * ComputeQuantiles:")
+print(f"99.5% quantile = {q}")
+print(" * MetropolisHastingsMean")
+print(f"Moy = {Moy}")
