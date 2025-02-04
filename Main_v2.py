@@ -2,7 +2,7 @@
 """
 Created on Tue Jan 28 16:17:19 2025
 
-@author: arman et paul
+@author: arman paul et vetle
 """
 
 import scipy.stats
@@ -122,6 +122,7 @@ def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
     Y = Computation_Y(T, Lambda)
     theta = np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
+    sum_theta = theta
     
     for i in range(int(niter)):
         candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
@@ -137,8 +138,10 @@ def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
         # burn-in
         if i+1 % 1000 == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/(i+1) - gamma_final)*gamma
+        
+        sum_theta = np.add(sum_theta, theta)
     
-    return theta
+    return (1/(niter + 1))*(sum_theta)
     
 #Test of the different functions 
 T = 20
@@ -151,8 +154,9 @@ A = BuildA(Delta, Vt)
 sh = Buildsh(T, a, b)
 x,x_tilde = ComputeArgmax(T,Lambda)
 mu,mu_tilde = ComputeMeans(T,Lambda)
-q = ComputeQuantiles(T,Lambda,0.995*np.ones(20))
-Moy = MetropolisHastingsMean(T,Lambda,niter=1e4)
+q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(20))
+q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(20))
+Moy1 = MetropolisHastingsMean(T,Lambda,niter=1e5)
 
 print(f"We test our functions for T={T} and Lambda={Lambda}")
 print("------- variables -------")
@@ -167,6 +171,8 @@ print(" * ComputeMeans: ")
 print(f"mu = {mu}")
 print(f"mu_tilde = {mu_tilde}")
 print(" * ComputeQuantiles:")
-print(f"99.5% quantile = {q}")
+print(f"97.5% quantile = {q1}")
+print(f"97.5% quantile = {q2}")
 print(" * MetropolisHastingsMean")
-print(f"Moy = {Moy}")
+print(f"Moy empirique = {Moy1}")
+print(f"Moy théorique = {mu}")
