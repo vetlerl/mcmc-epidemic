@@ -59,23 +59,21 @@ def Computation_Y(T, Lambda):
     return Y
 
 #Compute argmax of pi and pi_tilde distributions
-def ComputeArgmax(T,Lambda):
+def ComputeArgmax(T,Lambda, Y):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
     
     u=U@Y+sh
     x_tilde=np.sign(u)*np.maximum(np.abs(u)-Lambda,np.zeros(T))-sh
     x=npl.solve(D,x_tilde)
     return x,x_tilde
 
-def ComputeMeans(T, Lambda):
+def ComputeMeans(T, Lambda, Y):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
     #assert ((0 <= -sh-mu_plus) & (-sh-mu_plus <= 1)).all()
     C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
@@ -89,11 +87,10 @@ def ComputeMeans(T, Lambda):
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
 
-def ComputeQuantiles(T, Lambda, s):
+def ComputeQuantiles(T, Lambda, s, Y):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
     C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
     mu_minus = U @ Y - Lambda*np.ones(T)
@@ -112,14 +109,13 @@ def ComputeQuantiles(T, Lambda, s):
 def DistributionPi(x, Y, A, D, sh, Lambda):
     return np.exp(((-1/2)*np.linalg.norm(Y - A@x)**2)-Lambda*np.linalg.norm(D@x + sh,ord=1))
 
-def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
+def MetropolisHastingsMean(T, Lambda, Y, niter=1e7, a=1, b=2):
     D = BuildD(T)
     gamma = 0.01
     gamma_final = 0.24
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
     theta = np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
     sum_theta = theta
@@ -137,11 +133,10 @@ def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
                 acceptance_cnt += 1
         # burn-in
         if i+1 % 1000 == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/(i+1) - gamma_final)*gamma
-        
-        sum_theta = np.add(sum_theta, theta)
+            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            sum_theta = np.add(sum_theta, theta)
     
-    return (1/(niter + 1))*(sum_theta)
+    return (1000/(niter + 1))*(sum_theta)
     
 #Test of the different functions 
 T = 20
@@ -150,13 +145,13 @@ Lambda = 1
 D = BuildD(T)
 U, Delta, Vt = BuildUVDelta(D)
 A = BuildA(Delta, Vt)
-
 sh = Buildsh(T, a, b)
-x,x_tilde = ComputeArgmax(T,Lambda)
-mu,mu_tilde = ComputeMeans(T,Lambda)
-q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(20))
-q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(20))
-Moy1 = MetropolisHastingsMean(T,Lambda,niter=1e5)
+Y = Computation_Y(T, Lambda)
+x,x_tilde = ComputeArgmax(T,Lambda, Y)
+mu,mu_tilde = ComputeMeans(T,Lambda, Y)
+q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(20), Y)
+q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(20), Y)
+Moy1 = MetropolisHastingsMean(T,Lambda, Y)
 
 print(f"We test our functions for T={T} and Lambda={Lambda}")
 print("------- variables -------")
@@ -172,7 +167,7 @@ print(f"mu = {mu}")
 print(f"mu_tilde = {mu_tilde}")
 print(" * ComputeQuantiles:")
 print(f"97.5% quantile = {q1}")
-print(f"97.5% quantile = {q2}")
+print(f"2.5% quantile = {q2}")
 print(" * MetropolisHastingsMean")
 print(f"Moy empirique = {Moy1}")
 print(f"Moy théorique = {mu}")
