@@ -2,7 +2,7 @@
 """
 Created on Tue Jan 28 16:17:19 2025
 
-@author: arman et paul
+@author: arman, paul, & vetle
 """
 
 import scipy.stats
@@ -22,7 +22,7 @@ def BuildD(T):
     return D
 #U,Delta,V
 def BuildUVDelta(D):
-    U, Delta, Vt = np.linalg.svd(D, full_matrices=False)
+    U, Delta, Vt = npl.svd(D, full_matrices=False)
     return U,Delta,Vt
 
 #A
@@ -36,25 +36,28 @@ def Buildsh(T,a,b):
     sh[1] = b/2
     return sh
 
-#Simulation of a n-sample of Y
-def Computation_Y(T, Lambda):
+#Simulation of a T-sample of Y
+def ComputationY(T, Lambda, sparse=0.7):
+    """
+    T : integer := the size of Y
+    Lambda : float := mean of x_tilde_true's exponential distribution
+    sparse : float in [0,1] := sparcity/parsimony percentage of x_tilde_true
+    """
+    bernoulli = scipy.stats.bernoulli(p = sparse)
+    exponential = scipy.stats.expon(Lambda)
 
     D = BuildD(T)
-    
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
-    
     sh = Buildsh(T, a, b)
-    
-    
-    x_tilde_true = np.zeros(T)
-    for i in range(T) : # probably a more efficient way to do that
-        rd = np.random.uniform(0,1)
-        if(rd<0.3):
-            x_tilde_true[i] = np.random.exponential(Lambda)
 
+    x_tilde_true = bernoulli.rvs(size = T) # generates binary map
+    x_tilde_true = x_tilde_true * exponential.rvs(size = T)
     x_true = npl.solve(D, x_tilde_true)
-    Y = np.random.multivariate_normal(A@x_true, np.identity(T))
+
+    multi_norm = scipy.stats.multivariate_normal(mean = A @ x_true, cov = np.identity(T))
+
+    Y = multi_norm.rvs(size = T)
     
     return Y
 
@@ -64,7 +67,7 @@ def ComputeArgmax(T,Lambda):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
+    Y = ComputationY(T, Lambda)
     
     u=U@Y+sh
     x_tilde=np.sign(u)*np.maximum(np.abs(u)-Lambda,np.zeros(T))-sh
@@ -75,7 +78,7 @@ def ComputeMeans(T, Lambda):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
+    Y = ComputationY(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
     #assert ((0 <= -sh-mu_plus) & (-sh-mu_plus <= 1)).all()
     C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
@@ -93,7 +96,7 @@ def ComputeQuantiles(T, Lambda, s):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
+    Y = ComputationY(T, Lambda)
     mu_plus = U @ Y + Lambda*np.ones(T)
     C_plus = scipy.stats.norm.cdf(-sh-mu_plus)
     mu_minus = U @ Y - Lambda*np.ones(T)
@@ -119,7 +122,7 @@ def MetropolisHastingsMean(T, Lambda, niter=1e7, a=1, b=2):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    Y = Computation_Y(T, Lambda)
+    Y = ComputationY(T, Lambda)
     theta = np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
     
@@ -151,8 +154,7 @@ A = BuildA(Delta, Vt)
 sh = Buildsh(T, a, b)
 x,x_tilde = ComputeArgmax(T,Lambda)
 mu,mu_tilde = ComputeMeans(T,Lambda)
-q = ComputeQuantiles(T,Lambda,0.975*np.ones(20))
-q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(20))
+q = ComputeQuantiles(T,Lambda,0.995*np.ones(20))
 Moy = MetropolisHastingsMean(T,Lambda,niter=1e4)
 
 print(f"We test our functions for T={T} and Lambda={Lambda}")
@@ -168,7 +170,6 @@ print(" * ComputeMeans: ")
 print(f"mu = {mu}")
 print(f"mu_tilde = {mu_tilde}")
 print(" * ComputeQuantiles:")
-print(f"97.5% quantile = {q}")
-print(f"2.5% quantile = {q2}")
+print(f"99.5% quantile = {q}")
 print(" * MetropolisHastingsMean")
 print(f"Moy = {Moy}")
