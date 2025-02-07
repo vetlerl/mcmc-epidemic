@@ -107,9 +107,44 @@ def ComputeQuantiles(T, Lambda, s, Y):
     return probas
 
 def DistributionPi(x, Y, A, D, sh, Lambda):
-    return np.exp(((-1/2)*np.linalg.norm(Y - A@x)**2)-Lambda*np.linalg.norm(D@x + sh,ord=1))
+    return np.exp((-np.linalg.norm(Y - A@x)**2)/2-Lambda*np.linalg.norm(D@x + sh,ord=1))
+
+def LogDistributionPi(x, Y, A, D, sh, Lambda):
+    return (-np.linalg.norm(Y - A@x)**2)/2-Lambda*np.linalg.norm(D@x + sh,ord=1)
 
 def MetropolisHastingsMean(T, Lambda, Y, niter=1e7, a=1, b=2):
+    D = BuildD(T)
+    gamma = 0.001
+    gamma_final = 0.24
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = np.zeros(T) # maybe choose another starting point
+    acceptance_cnt = 0
+    sum_theta = theta
+    
+    for i in range(int(niter)):
+        candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
+        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            tmp = np.random.uniform()
+            if tmp <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+        # burn-in
+        if ((i+1) % 1000) == 0 : # every 1000th iteration
+            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            print(acceptance_cnt)
+            acceptance_cnt=0
+            sum_theta = np.add(sum_theta, theta)
+            print("Gamme = ", gamma)
+        #print("Theta=",theta)
+    return (1000/niter)*(sum_theta)
+
+def MetropolisHastingsQuantiles(T, Lambda, Y, q,  niter=1e5, a=1, b=2):
     D = BuildD(T)
     gamma = 0.01
     gamma_final = 0.24
@@ -118,28 +153,31 @@ def MetropolisHastingsMean(T, Lambda, Y, niter=1e7, a=1, b=2):
     sh = Buildsh(T, a, b)
     theta = np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
-    sum_theta = theta
-    
+    theta_tab = np.zeros((int(niter+1), T))
+    theta_tab[0,:]=D@theta
+
     for i in range(int(niter)):
         candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
-        alpha = DistributionPi(candidate, Y, A, D, sh, Lambda)/DistributionPi(theta, Y, A, D, sh, Lambda)
-        if alpha >=1 :
+        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
         else:
             tmp = np.random.uniform()
-            if tmp <= alpha: # probability alpha of success
+            if tmp <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
         # burn-in
-        if i+1 % 1000 == 0 : # every 1000th iteration
+        if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            sum_theta = np.add(sum_theta, theta)
-    
-    return (1000/(niter + 1))*(sum_theta)
+            acceptance_cnt=0
+            #print("Theta=",theta)
+
+        theta_tab[i+1,:]=D@theta
+    return np.percentile(theta_tab,q,axis=0)
     
 #Test of the different functions 
-T = 20
+T = 5
 Lambda = 1
 
 D = BuildD(T)
@@ -149,10 +187,12 @@ sh = Buildsh(T, a, b)
 Y = Computation_Y(T, Lambda)
 x,x_tilde = ComputeArgmax(T,Lambda, Y)
 mu,mu_tilde = ComputeMeans(T,Lambda, Y)
-q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(20), Y)
-q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(20), Y)
+q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(T), Y)
+q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(T), Y)
 Moy1 = MetropolisHastingsMean(T,Lambda, Y)
-
+#q11 = MetropolisHastingsQuantiles(T, Lambda, Y,97.5)
+#q21 = MetropolisHastingsQuantiles(T, Lambda, Y, 2.5)
+"""
 print(f"We test our functions for T={T} and Lambda={Lambda}")
 print("------- variables -------")
 print(f"D = {D}")
@@ -162,12 +202,19 @@ print("------- functions -------")
 print(" * ComputeArgmax: ")
 print(f"x_tilde = {x_tilde}")
 print(f"x = {x}")
+"""
 print(" * ComputeMeans: ")
 print(f"mu = {mu}")
 print(f"mu_tilde = {mu_tilde}")
-print(" * ComputeQuantiles:")
-print(f"97.5% quantile = {q1}")
-print(f"2.5% quantile = {q2}")
+
 print(" * MetropolisHastingsMean")
 print(f"Moy empirique = {Moy1}")
 print(f"Moy théorique = {mu}")
+"""
+print(" * ComputeQuantiles:")
+print(f"97.5% quantile = {q1}")
+print(f"2.5% quantile = {q2}")
+
+print(f"Quantile empirique 97.5% = {q11}")
+print(f"Quantile empirique 2.5% = {q21}")
+"""
