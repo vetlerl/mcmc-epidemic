@@ -88,7 +88,8 @@ def ComputeMeans(T, Lambda, Y):
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
 
-def ComputeQuantiles(T, Lambda, s, Y):
+def ComputeQuantiles(T, Lambda, s, Y): # Fonction de répartition et non quantiles ici !
+    
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
@@ -97,15 +98,27 @@ def ComputeQuantiles(T, Lambda, s, Y):
     mu_minus = U @ Y - Lambda*np.ones(T)
     C_minus = 1 - scipy.stats.norm.cdf(-sh-mu_minus)
     gamma = C_plus / (C_plus + C_minus)
-    probas = np.zeros(T)
-    q_plus = np.zeros(T)
-    q_minus = np.zeros(T)
-    for i in range(T):
-        q_plus[i] = scipy.stats.norm.cdf(min(s[i]-mu_plus[i], -sh[i]-mu_plus[i])) / C_plus[i]
-        if(s[i]>-sh[i]):
-            q_minus[i] = (scipy.stats.norm.cdf(s[i]-mu_minus[i]) + C_minus[i] - 1) / C_minus[i]
-        probas[i] = gamma[i]*q_plus[i] + (1 - gamma[i])*q_minus[i]
-    return probas
+    probas = np.zeros((10000,T))
+    quantiles = np.zeros(T)
+    q_plus = 0
+    q_minus = 0
+    
+    for i in range(10000):
+        ub = -5 + i/1000
+        for j in range(T):
+            q_plus = scipy.stats.norm.cdf(min(ub-mu_plus[j], -sh[j]-mu_plus[j])) / C_plus[j]
+            q_minus = 0
+            if(ub>-sh[j]):
+                q_minus = (scipy.stats.norm.cdf(ub-mu_minus[j]) + C_minus[j] - 1) / C_minus[j]
+            probas[i,j] = gamma[j]*q_plus + (1 - gamma[j])*q_minus
+        
+    for k in range(T):
+        i = 0
+        while(probas[i,k]<s[k]):
+            i += 1
+        quantiles[k] = -5 + i/1000
+        
+    return quantiles
 
 def DistributionPi(x, Y, A, D, sh, Lambda):
     return np.exp((-np.linalg.norm(Y - A@x)**2)/2-Lambda*np.linalg.norm(D@x + sh,ord=1))
@@ -113,7 +126,7 @@ def DistributionPi(x, Y, A, D, sh, Lambda):
 def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-np.linalg.norm(Y - A@x)**2)/2-Lambda*np.linalg.norm(D@x + sh,ord=1)
 
-def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
+def MetropolisHastings(T, Lambda, Y, niter=1e6, a=1, b=2):
     D = BuildD(T)
     gamma = 0.001
     gamma_final = 0.24
