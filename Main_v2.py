@@ -39,7 +39,7 @@ def Buildsh(T,a,b):
 
 #Simulation of a n-sample of Y
 def Computation_Y(T, Lambda):
-
+    np.random.seed(42)
     D = BuildD(T)
     
     U, Delta, Vt = BuildUVDelta(D)
@@ -103,7 +103,7 @@ def ComputeQuantiles(T, Lambda, s, Y):
     for i in range(T):
         q_plus[i] = scipy.stats.norm.cdf(min(s[i]-mu_plus[i], -sh[i]-mu_plus[i])) / C_plus[i]
         if(s[i]>-sh[i]):
-            q_minus[i] = (scipy.stats.norm.cdf(s[i]-mu_minus[i]) + C_minus[i] - 1) / C_minus[i]
+            q_minus[i] = (scipy.stats.norm.cdf(s[i]-mu_minus[i]) + C_minus[i] - 1) / (C_minus[i] + 1e-6)
         probas[i] = gamma[i]*q_plus[i] + (1 - gamma[i])*q_minus[i]
     return probas
 
@@ -125,6 +125,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
     sum_theta = theta
     theta_tab = np.zeros((int(niter+1), T))
     theta_tab[0,:]=D@theta
+    plt.figure(1)
     
     for i in range(int(niter)):
         candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
@@ -141,10 +142,13 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
             acceptance_cnt=0
+            plt.plot(D@theta,c="blue",alpha=0.2)
+            plt.pause(0.1)
             
         sum_theta = np.add(sum_theta, theta)
         theta_tab[i+1,:]=D@theta
-        
+    plt.title("Distribution of theta")
+    plt.show()
     return (1/niter)*(sum_theta),theta_tab
 
 #Return the quantiles q (possibly an array of quantiles) of the array sim_tab
@@ -156,8 +160,8 @@ def Quantiles(sim_tab,q,T):
     
 #Test of the different functions 
 T = 5
-Lambda = 1
-
+Lambda = 10
+np.random.seed(42)
 D = BuildD(T)
 U, Delta, Vt = BuildUVDelta(D)
 A = BuildA(Delta, Vt)
@@ -201,9 +205,10 @@ print(f"Quantile empirique 2.5% = {quantiles_emp[0]}")
 
 
 #Plot of theoritical results
-plt.figure()
+plt.figure(2)
 plt.plot(mu_tilde,color="blue",label="Mean")
 plt.plot(x_tilde,color="darksalmon",label="Argmax")
+plt.plot(D@Mean,color="black",label="Empirical mean")
 plt.plot(med,'g--',label="Median")
 plt.plot(q1,'b--',label="97.5 quantile")
 plt.plot(q2,'r--',label="2.5 quantile")
