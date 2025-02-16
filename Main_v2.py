@@ -126,7 +126,7 @@ def DistributionPi(x, Y, A, D, sh, Lambda):
 def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-np.linalg.norm(Y - A@x)**2)/2-Lambda*np.linalg.norm(D@x + sh,ord=1)
 
-def MetropolisHastings(T, Lambda, Y, niter=1e6, a=1, b=2):
+def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
     D = BuildD(T)
     gamma = 0.001
     gamma_final = 0.24
@@ -137,8 +137,12 @@ def MetropolisHastings(T, Lambda, Y, niter=1e6, a=1, b=2):
     acceptance_cnt = 0
     sum_theta = theta
     theta_tab = np.zeros((int(niter+1), T))
-    theta_tab[0,:]=D@theta
-    
+    theta_tab[0,:]=theta
+    theta_tilde_tab = np.zeros((int(niter+1), T))
+    theta_tilde_tab[0,:]=D@theta
+    #Convergence of acceptance ratio
+    plt.figure()
+    plt.title("Convergence op the acceptance ratio")
     for i in range(int(niter)):
         candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
@@ -153,12 +157,16 @@ def MetropolisHastings(T, Lambda, Y, niter=1e6, a=1, b=2):
         # burn-in
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            accpt_ratio=acceptance_cnt/1000
+            plt.plot(i,accpt_ratio,'.-.b')
+            plt.plot(i,gamma_final,'.-.r',alpha=0.5)
+            plt.pause(0.01)
             acceptance_cnt=0
             
-        sum_theta = np.add(sum_theta, theta)
-        theta_tab[i+1,:]=D@theta
-        
-    return (1/niter)*(sum_theta),theta_tab
+        theta_tab[i+1,:]=theta
+        theta_tilde_tab[i+1,:]=D@theta
+
+    return theta_tab,theta_tilde_tab
 
 #Return the quantiles q (possibly an array of quantiles) of the array sim_tab
 def Quantiles(sim_tab,q,T):
@@ -181,9 +189,10 @@ mu,mu_tilde = ComputeMeans(T,Lambda, Y)
 q1 = ComputeQuantiles(T,Lambda,0.975*np.ones(T), Y)
 q2 = ComputeQuantiles(T,Lambda,0.025*np.ones(T), Y)
 med = ComputeQuantiles(T,Lambda,0.5*np.ones(T), Y)
-Mean,sim_tab = MetropolisHastings(T,Lambda, Y)
+sim_theta,sim_theta_tilde = MetropolisHastings(T,Lambda, Y)
+Mean=np.sum(sim_theta,axis=0)/sim_theta.shape[0]
 q = np.array([2.5,50,97.5])
-quantiles_emp = Quantiles(sim_tab, q,T)
+quantiles_emp = Quantiles(sim_theta_tilde, q,T)
 """
 print(f"We test our functions for T={T} and Lambda={Lambda}")
 print("------- variables -------")
@@ -194,7 +203,7 @@ print("------- functions -------")
 print(" * ComputeArgmax: ")
 print(f"x_tilde = {x_tilde}")
 print(f"x = {x}")
-"""
+
 print(" * ComputeMeans: ")
 print(f"mu = {mu}")
 print(f"mu_tilde = {mu_tilde}")
@@ -211,15 +220,41 @@ print(f"2.5% quantile = {q2}")
 print(f"Quantile empirique 97.5% = {quantiles_emp[2]}")
 print(f"Mediane empirique = {quantiles_emp[1]}")
 print(f"Quantile empirique 2.5% = {quantiles_emp[0]}")
-
-
+"""
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 6))
 #Plot of theoritical results
+axes[0].plot(mu_tilde,color="blue",label="Mean")
+axes[0].plot(x_tilde,color="darksalmon",label="Argmax")
+axes[0].plot(med,'g--',label="Median")
+axes[0].plot(q1,'b--',label="97.5 quantile")
+axes[0].plot(q2,'r--',label="2.5 quantile")
+axes[0].set_title("Theoritical results for pi tilde")
+
+
+#Plot of empirical results
+axes[1].plot(D@Mean,color="blue",label="Mean")
+axes[1].plot(x_tilde,color="darksalmon",label="Argmax")
+axes[1].plot(quantiles_emp[1],'g--',label="Median")
+axes[1].plot(quantiles_emp[2],'b--',label="97.5 quantile")
+axes[1].plot(quantiles_emp[0],'r--',label="2.5 quantile")
+axes[1].set_title("Empirical results for pi tilde")
+axes[1].legend()
+plt.tight_layout()
+plt.show()
+
+
+
+#Convergence plot of the mean of theta_tilde
+nb_iter=sim_theta.shape[0]
+x=np.linspace(1,nb_iter,nb_iter)
+mean_tab=np.cumsum(sim_theta_tilde,axis=0)
+
 plt.figure()
-plt.plot(mu_tilde,color="blue",label="Mean")
-plt.plot(x_tilde,color="darksalmon",label="Argmax")
-plt.plot(med,'g--',label="Median")
-plt.plot(q1,'b--',label="97.5 quantile")
-plt.plot(q2,'r--',label="2.5 quantile")
-plt.title("Theoritical results for pi tilde")
+for i in range(T):
+    plt.subplot(T,1,i+1)
+    res=mean_tab[:,i]/x
+    plt.plot(x,res)
+    plt.plot(x,mu_tilde[i]*np.ones(nb_iter),'r',label="Theoritical Mean",alpha=0.5)
+plt.title("Convergence of empirical mean of pi tilde")
 plt.legend()
 plt.show()
