@@ -86,7 +86,7 @@ def ComputeMeans(T, Lambda, Y):
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
 
-def ComputeQuantiles(T, Lambda, s, Y, niter=1e4): # Fonction de répartition et non quantiles ici !
+def ComputeQuantiles(T, Lambda, s, Y, niter=1e5): # Fonction de répartition et non quantiles ici !
     
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
@@ -102,7 +102,7 @@ def ComputeQuantiles(T, Lambda, s, Y, niter=1e4): # Fonction de répartition et 
     q_minus = 0
     
     for i in range(int(niter)):
-        ub = -5 + i/int(niter)
+        ub = -5 + i/1000
         for j in range(T):
             q_plus = sps.norm.cdf(min(ub-mu_plus[j], -sh[j]-mu_plus[j])) / C_plus[j]
             q_minus = 0
@@ -112,7 +112,7 @@ def ComputeQuantiles(T, Lambda, s, Y, niter=1e4): # Fonction de répartition et 
         
     for k in range(T):
         i = 0
-        while i<int(niter) and probas[i,k]<s[k]:
+        while probas[i,k]<s[k]:
             i += 1
         quantiles[k] = -5 + i/1000
         
@@ -138,7 +138,11 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5):
     theta_tab[0,:]=theta
     theta_tilde_tab = np.zeros((int(niter+1), T))
     theta_tilde_tab[0,:]=D@theta
-    #Convergence of acceptance ratio
+
+    # for plotting
+    gamma_array = [gamma]
+    accept_array = []
+    
     for i in range(int(niter)):
         candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
@@ -153,13 +157,15 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5):
         # burn-in
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            accpt_ratio=acceptance_cnt/1000
+            # save
+            gamma_array.append(gamma)
+            accept_array.append(acceptance_cnt/1000)
             acceptance_cnt=0
             
         theta_tab[i+1,:]=theta
         theta_tilde_tab[i+1,:]=D@theta
 
-    return theta_tab,theta_tilde_tab
+    return theta_tab,theta_tilde_tab, np.array(accept_array), np.array(gamma_array)
 
 #Return the quantiles q (possibly an array of quantiles) of the array sim_tab
 def Quantiles(sim_tab,q,T):
