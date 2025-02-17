@@ -124,7 +124,7 @@ def DistributionPi(x, Y, A, D, sh, Lambda):
 def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
 
-def MetropolisHastings(T, Lambda, Y, niter=1e5):
+def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
     D = BuildD(T)
     gamma = 0.001
     gamma_final = 0.24
@@ -140,8 +140,12 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5):
     theta_tilde_tab[0,:]=D@theta
 
     # for plotting
-    gamma_array = [gamma]
-    accept_array = []
+    if save:
+        gammas = [gamma]
+        accepts = []
+    else:
+        gammas = None
+        accepts = None
     
     for i in range(int(niter)):
         candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
@@ -158,14 +162,17 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5):
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
             # save
-            gamma_array.append(gamma)
-            accept_array.append(acceptance_cnt/1000)
+            if save:
+                gammas.append(gamma)
+                accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
             
         theta_tab[i+1,:]=theta
         theta_tilde_tab[i+1,:]=D@theta
-
-    return theta_tab,theta_tilde_tab, np.array(accept_array), np.array(gamma_array)
+    if save:
+        accepts = np.array(accepts)
+        gammas = np.array(gammas)
+    return theta_tab,theta_tilde_tab, accepts, gammas
 
 #Return the quantiles q (possibly an array of quantiles) of the array sim_tab
 def Quantiles(sim_tab,q,T):
