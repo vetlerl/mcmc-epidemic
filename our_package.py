@@ -176,9 +176,8 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
 
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
     """
-    estimates theta_tilde using MH, but only saves the min(niter,1000) iterations
-    additionally, we will return the corresponding x axis, for simplification,
-    and the D matrix for converting between theta_tilde and theta
+    estimates theta_tilde using MH
+    returns the last value for theta and theta_tilde
     """
     n = min(int(1e3),niter)
     D = BuildD(T)
@@ -189,10 +188,9 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
     gamma_final = 0.24
     acceptance_cnt = 0
     theta = np.ones(T)
+    theta_sum = theta
     
-    theta_tilde_tab = []
-    x = []
-    for i in range(int(niter)):
+    for i in range(1,int(niter)+1):
         candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
@@ -207,11 +205,10 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
             acceptance_cnt=0
-        # save last n thetas
-        if niter - i <= n: 
-            theta_tilde_tab.append(D@theta)
-            x.append(i)
-    return np.array(theta_tilde_tab), np.array(x)
+        # update theta
+        theta_sum += theta
+        theta_mean = theta_sum/niter
+    return theta_mean, D@theta_mean
 
 
     
@@ -221,4 +218,5 @@ def Quantiles(sim_tab,q,T):
     for i in range(len(q)):
         quantiles_tab[i,:]=np.percentile(sim_tab,q[i],axis=0)
     return quantiles_tab
-    
+
+
