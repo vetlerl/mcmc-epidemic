@@ -1,0 +1,10 @@
+#ignore compiled python files
+__pycache__/
+*.pyc
+*.pyo
+
+#ignore jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+#ignore vs code settings
+.vscode/
