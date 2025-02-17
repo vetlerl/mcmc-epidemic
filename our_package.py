@@ -174,6 +174,47 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
         gammas = np.array(gammas)
     return theta_tab,theta_tilde_tab, accepts, gammas
 
+def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
+    """
+    estimates theta_tilde using MH, but only saves the min(niter,1000) iterations
+    additionally, we will return the corresponding x axis, for simplification,
+    and the D matrix for converting between theta_tilde and theta
+    """
+    n = min(int(1e3),niter)
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    gamma = 0.001
+    gamma_final = 0.24
+    acceptance_cnt = 0
+    theta = np.ones(T)
+    
+    theta_tilde_tab = []
+    x = []
+    for i in range(int(niter)):
+        candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
+        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            tmp = npr.uniform()
+            if tmp <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+        # burn-in
+        if ((i+1) % 1000) == 0 : # every 1000th iteration
+            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            acceptance_cnt=0
+        # save last n thetas
+        if niter - i <= n: 
+            theta_tilde_tab.append(D@theta)
+            x.append(i)
+    return np.array(theta_tilde_tab), np.array(x)
+
+
+    
 #Return the quantiles q (possibly an array of quantiles) of the array sim_tab
 def Quantiles(sim_tab,q,T):
     quantiles_tab=np.zeros((len(q),T))
