@@ -103,7 +103,7 @@ def ComputeQuantiles(T, Lambda, s, Y): # Fonction de répartition et non quantil
     q_plus = 0
     q_minus = 0
     
-    for i in range(10000):
+    for i in range(0,10000):
         ub = -5 + i/1000
         for j in range(T):
             q_plus = scipy.stats.norm.cdf(min(ub-mu_plus[j], -sh[j]-mu_plus[j])) / C_plus[j]
@@ -140,9 +140,9 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
     theta_tab[0,:]=theta
     theta_tilde_tab = np.zeros((int(niter+1), T))
     theta_tilde_tab[0,:]=D@theta
-    #Convergence of acceptance ratio
-    plt.figure()
-    plt.title("Convergence op the acceptance ratio")
+    accpt_ratio = np.zeros(int(niter)//1000)
+
+    
     for i in range(int(niter)):
         candidate = np.random.multivariate_normal(theta, gamma*np.identity(T))
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
@@ -157,14 +157,21 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, a=1, b=2):
         # burn-in
         if ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            accpt_ratio=acceptance_cnt/1000
-            plt.plot(i,accpt_ratio,'.-.b')
-            plt.plot(i,gamma_final,'.-.r',alpha=0.5)
+            accpt_ratio[i//1000] =acceptance_cnt/1000
+            #plt.plot(i,accpt_ratio,'.-.b')
+            #plt.plot(i,gamma_final,'.-.r',alpha=0.5)
+            plt.plot(theta_tilde_tab[i], color = "blue", label = "Theta")
             plt.pause(0.01)
             acceptance_cnt=0
             
         theta_tab[i+1,:]=theta
         theta_tilde_tab[i+1,:]=D@theta
+        
+    #Convergence of acceptance ratio
+    plt.figure()
+    plt.plot(accpt_ratio)
+    plt.axhline(gamma_final, color = 'r')
+    plt.title("Convergence of the acceptance ratio")
 
     return theta_tab,theta_tilde_tab
 
@@ -228,7 +235,7 @@ axes[0].plot(x_tilde,color="darksalmon",label="Argmax")
 axes[0].plot(med,'g--',label="Median")
 axes[0].plot(q1,'b--',label="97.5 quantile")
 axes[0].plot(q2,'r--',label="2.5 quantile")
-axes[0].set_title("Theoritical results for pi tilde")
+axes[0].set_title("Theoretical results for pi tilde")
 
 
 #Plot of empirical results
