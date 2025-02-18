@@ -80,8 +80,8 @@ def ComputeMeans(T, Lambda, Y):
     mu_minus = U @ Y - Lambda*np.ones(T)
     C_minus = 1 - sps.norm.cdf(-sh-mu_minus)
     gamma = C_plus / (C_plus + C_minus)
-    mu_tilde_plus = mu_plus - np.exp(-((sh+mu_plus)**2)/2) / (np.sqrt(2*np.pi)*C_plus)
-    mu_tilde_minus = mu_minus + np.exp(-((sh+mu_minus)**2)/2) / (np.sqrt(2*np.pi)*C_minus)
+    mu_tilde_plus = mu_plus - np.exp(-((sh+mu_plus)**2)/2) / (np.sqrt(2*np.pi)*C_plus+1e-16)
+    mu_tilde_minus = mu_minus + np.exp(-((sh+mu_minus)**2)/2) / (np.sqrt(2*np.pi)*C_minus+1e-16)
     mu_tilde = gamma*mu_tilde_plus + (1-gamma)*mu_tilde_minus
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
@@ -174,12 +174,18 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
         gammas = np.array(gammas)
     return theta_tab,theta_tilde_tab, accepts, gammas
 
-def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
+def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
-    estimates theta_tilde using MH
-    returns the last value for theta and theta_tilde
+    estimates theta and theta_tilde using the Metropolis Hastings algorithm (MH), with burn-in
+    parameters:
+    - T: vector space dimension, size of theta and theta_tilde
+    - Lambda: parameter for the pi distribution
+    - Y: parsimonious random vector of size T
+    - covariance
+        "source": the MH will use the identity matrix and simulate theta in the source domain
+        "image": the MH will simulate theta_tilde in the image domain
+    returns a tuple of two T sized vectors; theta and theta_tilde, obtained on the last MH iteration
     """
-    n = min(int(1e3),niter)
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
@@ -187,11 +193,20 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
     gamma = 0.001
     gamma_final = 0.24
     acceptance_cnt = 0
+    burn_in = True
     theta = np.ones(T)
-    theta_sum = theta
-    
+    theta_mean = np.zeros(T)
+    cnt = 0
+    if method=="image":
+        D_1 = npl.solve(D,np.identity(T))
+        C = D_1@D_1.T
+    elif method=="source":
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image'")
+        
     for i in range(1,int(niter)+1):
-        candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
+        candidate = npr.multivariate_normal(theta, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -202,13 +217,24 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5):
                 theta = candidate
                 acceptance_cnt += 1
         # burn-in
-        if ((i+1) % 1000) == 0 : # every 1000th iteration
+        if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            burn_in = abs(acceptance_cnt/1000-gamma_final)>1e-2 # acceptable rate, stop adjusting gamma
             acceptance_cnt=0
+            cnt=0
+            
         # update theta
-        theta_sum += theta
-        theta_mean = theta_sum/niter
-    return theta_mean, D@theta_mean
+        if not burn_in:
+            theta_mean += theta
+        cnt += 1
+    theta_mean = theta_mean/cnt
+    
+    if method=="image":
+        theta,theta_tilde = D_1@theta_mean, theta_mean
+    else:
+        theta,theta_tilde = theta_mean, D@theta_mean
+
+    return theta, theta_tilde
 
 
     
