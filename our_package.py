@@ -124,6 +124,12 @@ def DistributionPi(x, Y, A, D, sh, Lambda):
 def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
 
+def LogDistributionPi_Tab(x_tab, Y, A, D, sh, Lambda):
+    l_tab = np.zeros(len(x_tab))
+    for i in range(len(l_tab)):
+        l_tab[i] = (-npl.norm(Y - A@(x_tab[i]))**2)/2-Lambda*npl.norm(D@(x_tab[i]) + sh,ord=1)
+    return l_tab
+
 def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
     
     D = BuildD(T)
@@ -247,7 +253,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     theta_mean = theta_mean/cnt
     
     if method=="image":
-        theta,theta_tilde = D_1@theta_mean, theta_mean
+        theta,theta_tilde = theta_mean, D@theta_mean
     else:
         theta,theta_tilde = theta_mean, D@theta_mean
 
