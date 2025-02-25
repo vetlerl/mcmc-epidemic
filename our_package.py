@@ -125,6 +125,7 @@ def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
 
 def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
+    
     D = BuildD(T)
     gamma = 0.001
     gamma_final = 0.24
@@ -138,6 +139,9 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
     theta_tab[0,:]=theta
     theta_tilde_tab = np.zeros((int(niter+1), T))
     theta_tilde_tab[0,:]=D@theta
+    burn_in = True
+    theta_mean = np.zeros(T)
+    cnt = 0
 
     # for plotting
     if save:
@@ -159,20 +163,30 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
                 theta = candidate
                 acceptance_cnt += 1
         # burn-in
-        if ((i+1) % 1000) == 0 : # every 1000th iteration
+        if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
+            burn_in = abs(acceptance_cnt/1000-gamma_final)>1e-2 # acceptable rate, stop adjusting gamma
+            cnt=0
             # save
             if save:
                 gammas.append(gamma)
                 accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
+
+        if not burn_in:
+            theta_mean += theta
+            cnt += 1
             
         theta_tab[i+1,:]=theta
         theta_tilde_tab[i+1,:]=D@theta
+
+    theta_mean = theta_mean/cnt
+    
     if save:
         accepts = np.array(accepts)
         gammas = np.array(gammas)
-    return theta_tab,theta_tilde_tab, accepts, gammas
+        
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean
 
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
@@ -184,8 +198,9 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     - covariance
         "source": the MH will use the identity matrix and simulate theta in the source domain
         "image": the MH will simulate theta_tilde in the image domain
-    returns a tuple of two T sized vectors; theta and theta_tilde, obtained on the last MH iteration
+    returns a tuple of two T sized vectors; means of theta and theta_tilde, obtained on all MH iterations
     """
+    
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
@@ -197,6 +212,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     theta = np.ones(T)
     theta_mean = np.zeros(T)
     cnt = 0
+    
     if method=="image":
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
@@ -226,7 +242,8 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
         # update theta
         if not burn_in:
             theta_mean += theta
-        cnt += 1
+            cnt += 1
+            
     theta_mean = theta_mean/cnt
     
     if method=="image":
