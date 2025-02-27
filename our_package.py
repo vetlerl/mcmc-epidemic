@@ -141,6 +141,17 @@ def LogDistributionPi_Tab(x_tab, Y, A, D, sh, Lambda):
 def LogDistributionPi_Full(x, Y, A, D, sh, Lambda):
     return ((-npl.norm(Y - A@x)**2)/2, -Lambda*npl.norm(D@x + sh,ord=1))
 
+def sub_diff(x, sh):
+    sub = np.zeros(len(x))
+    for i in range(len(x)):
+        if(x[i]+sh[i]>0):
+            sub[i] = 1
+        elif(x[i]+sh[i]<0):
+            sub[i] = -1
+        else:
+            sub[i] = 0
+    return sub
+
 def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     
     D = BuildD(T)
@@ -169,16 +180,22 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     gammas = [gamma]
     accepts = []
     
-    if method=="image":
+    if (method=="image" or method=="subdiff_image"):
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif method=="source":
+    elif (method=="source" or method=="subdiff_source"):
         C = np.identity(T)
     else:
-        raise Exception("method must be either 'source' or 'image'")
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(int(niter)):
-        candidate = npr.multivariate_normal(theta, gamma*C)
+        
+        if (method=="subdiff_source" or method=="subdiff_image") :
+            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+        else:
+            mu = theta
+            
+        candidate = npr.multivariate_normal(mu, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -238,16 +255,22 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         gammas = None
         accepts = None
         
-    if method=="image":
+    if (method=="image" or method=="subdiff_image"):
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif method=="source":
+    elif (method=="source" or method=="subdiff_source"):
         C = np.identity(T)
     else:
-        raise Exception("method must be either 'source' or 'image'")
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(int(niter)):
-        candidate = npr.multivariate_normal(theta, gamma*C)
+
+        if (method=="subdiff_source" or method=="subdiff_image") :
+            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+        else:
+            mu = theta
+        
+        candidate = npr.multivariate_normal(mu, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -307,16 +330,22 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     theta_mean = np.zeros(T)
     cnt = 0
     
-    if method=="image":
+    if (method=="image" or method=="subdiff_image"):
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif method=="source":
+    elif (method=="source" or method=="subdiff_source"):
         C = np.identity(T)
     else:
-        raise Exception("method must be either 'source' or 'image'")
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(1,int(niter)+1):
-        candidate = npr.multivariate_normal(theta, gamma*C)
+
+        if (method=="subdiff_source" or method=="subdiff_image") :
+            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+        else:
+            mu = theta
+            
+        candidate = npr.multivariate_normal(mu, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -339,11 +368,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
             cnt += 1
             
     theta_mean = theta_mean/cnt
-    
-    if method=="image":
-        theta,theta_tilde = theta_mean, D@theta_mean
-    else:
-        theta,theta_tilde = theta_mean, D@theta_mean
+    theta,theta_tilde = theta_mean, D@theta_mean
 
     return theta, theta_tilde
 
