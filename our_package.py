@@ -59,6 +59,14 @@ def Computation_Y(T, Lambda):
     
     return Y
 
+#Create a dictionnary of simulation of Y for different values of lambda
+def Create_DicoY(T,lambda_tab):
+    npr.seed(42)
+    Y_simu=dict()
+    for l in lambda_tab:
+        Y_simu[l]=Computation_Y(T,l)
+    return Y_simu
+
 #Compute argmax of pi and pi_tilde distributions
 def ComputeArgmax(T,Lambda, Y):
     D = BuildD(T)
@@ -133,7 +141,7 @@ def LogDistributionPi_Tab(x_tab, Y, A, D, sh, Lambda):
 def LogDistributionPi_Full(x, Y, A, D, sh, Lambda):
     return ((-npl.norm(Y - A@x)**2)/2, -Lambda*npl.norm(D@x + sh,ord=1))
 
-def MetropolisHastingsFull(T, Lambda, Y, niter=1e5):
+def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     
     D = BuildD(T)
     gamma = 0.001
@@ -161,8 +169,16 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5):
     gammas = [gamma]
     accepts = []
     
+    if method=="image":
+        D_1 = npl.solve(D,np.identity(T))
+        C = D_1@D_1.T
+    elif method=="source":
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image'")
+        
     for i in range(int(niter)):
-        candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
+        candidate = npr.multivariate_normal(theta, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -197,7 +213,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5):
         
     return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab
 
-def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
+def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     
     D = BuildD(T)
     gamma = 0.001
@@ -208,10 +224,8 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
     theta = np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
     sum_theta = theta
-    theta_tab = np.zeros((int(niter+1), T))
-    theta_tab[0,:]=theta
-    theta_tilde_tab = np.zeros((int(niter+1), T))
-    theta_tilde_tab[0,:]=D@theta
+    theta_tab = [theta]
+    theta_tilde_tab = [D@theta]
     burn_in = True
     theta_mean = np.zeros(T)
     cnt = 0
@@ -223,9 +237,17 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
     else:
         gammas = None
         accepts = None
-    
+        
+    if method=="image":
+        D_1 = npl.solve(D,np.identity(T))
+        C = D_1@D_1.T
+    elif method=="source":
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image'")
+        
     for i in range(int(niter)):
-        candidate = npr.multivariate_normal(theta, gamma*np.identity(T))
+        candidate = npr.multivariate_normal(theta, gamma*C)
         log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -249,9 +271,8 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
         if not burn_in:
             theta_mean += theta
             cnt += 1
-            
-        theta_tab[i+1,:]=theta
-        theta_tilde_tab[i+1,:]=D@theta
+            theta_tab.append(theta)
+            theta_tilde_tab.append(D@theta)
 
     theta_mean = theta_mean/cnt
     
@@ -259,7 +280,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5, save=True):
         accepts = np.array(accepts)
         gammas = np.array(gammas)
         
-    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean
+    return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean
 
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
