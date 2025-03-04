@@ -156,7 +156,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     
     D = BuildD(T)
     gamma = 0.001
-    gamma_final = 0.24
+    accept_final = 0.24
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
@@ -168,8 +168,10 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     theta_tilde_tab = np.zeros((int(niter+1), T))
     theta_tilde_tab[0,:]=D@theta
     burn_in = True
+    wait_conv=False
     theta_mean = np.zeros(T)
     cnt = 0
+    converge=0
 
     L1_tab = np.zeros(int(niter+1))
     L2_tab = np.zeros(int(niter+1))
@@ -207,21 +209,27 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
                 acceptance_cnt += 1
         # burn-in
         if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-gamma_final)>1e-2 # acceptable rate, stop adjusting gamma
-            cnt=0
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
+            wait_conv=not(burn_in)
             # save
             gammas.append(gamma)
             accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
-
-        if not burn_in:
+        elif wait_conv and ((i+1) % 1000) == 0:
+            converge+=1
+            wait_conv= converge<2e-4*niter
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            gammas.append(gamma)
+            accepts.append(acceptance_cnt/1000)
+            acceptance_cnt=0
+        else:
             theta_mean += theta
             cnt += 1
             
-        theta_tab[i+1,:]=theta
-        L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
-        theta_tilde_tab[i+1,:]=D@theta
+            theta_tab[i+1,:]=theta
+            L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
+            theta_tilde_tab[i+1,:]=D@theta
 
     theta_mean = theta_mean/cnt
     
@@ -234,7 +242,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     
     D = BuildD(T)
     gamma = 0.001
-    gamma_final = 0.24
+    accept_final = 0.24
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
@@ -244,8 +252,10 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     theta_tab = [theta]
     theta_tilde_tab = [D@theta]
     burn_in = True
+    wait_conv=False
     theta_mean = np.zeros(T)
     cnt = 0
+    converge=0
 
     # for plotting
     if save:
@@ -282,16 +292,24 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
                 acceptance_cnt += 1
         # burn-in
         if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-gamma_final)>1e-2 # acceptable rate, stop adjusting gamma
-            cnt=0
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
+            wait_conv=not(burn_in)
             # save
             if save:
                 gammas.append(gamma)
                 accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
-
-        if not burn_in:
+        elif wait_conv and ((i+1) % 1000) == 0:
+            converge+=1
+            wait_conv= converge<2e-4*niter
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            if save:
+                gammas.append(gamma)
+                accepts.append(acceptance_cnt/1000)
+            acceptance_cnt=0
+            acceptance_cnt=0
+        else:
             theta_mean += theta
             cnt += 1
             theta_tab.append(theta)
@@ -323,12 +341,14 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
     gamma = 0.001
-    gamma_final = 0.24
+    accept_final = 0.24
     acceptance_cnt = 0
     burn_in = True
+    wait_conv=False
     theta = np.ones(T)
     theta_mean = np.zeros(T)
     cnt = 0
+    converge=0
     
     if (method=="image" or method=="subdiff_image"):
         D_1 = npl.solve(D,np.identity(T))
@@ -357,13 +377,21 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
                 acceptance_cnt += 1
         # burn-in
         if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - gamma_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-gamma_final)>1e-2 # acceptable rate, stop adjusting gamma
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
             acceptance_cnt=0
-            cnt=0
+            wait_conv=not(burn_in)
             
+        elif wait_conv and ((i+1) % 1000) == 0:
+            converge+=1
+            wait_conv= converge<2e-4*niter
+            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
+            if save:
+                gammas.append(gamma)
+                accepts.append(acceptance_cnt/1000)
+            acceptance_cnt=0  
         # update theta
-        if not burn_in:
+        else:
             theta_mean += theta
             cnt += 1
             
