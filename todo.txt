@@ -1,0 +1,10 @@
+TO DO:
+attendre plus longtemps pour la convergence du taux d'acceptation/gamma
+voir pourquoi MH accepte des points dont la log densité est très basse pour la méthode source (peut-être pour les autres?)
+changer l'acceptation rejet pour les méthodes images (on a plus la symétrie), rajouter des Q(x,y)/Q(y,x) (Q=densité gaussienne)
+critères de comparaison des méthodes à lambda fixé:
+- distance entre theta_courant et argmax en fonction des itérations (normalisé par la norme de l'argmax)
+- la même chose en évaluant en log pi
+voir poly optimisation pour propriété du Prox (existence et unicité)
+(espace source) Méthode du prox pour la moyenne de la gaussienne => calculer le prox de gamma*f 
+(espace Image) Méthode du prox pour la moyenne de la gaussienne => calculer le prox de gamma*g 
