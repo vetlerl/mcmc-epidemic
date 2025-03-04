@@ -1,5 +1,5 @@
 TO DO:
-attendre plus longtemps pour la convergence du taux d'acceptation/gamma
+attendre plus longtemps pour la convergence du taux d'acceptation/gamma ✅
 voir pourquoi MH accepte des points dont la log densité est très basse pour la méthode source (peut-être pour les autres?)
 changer l'acceptation rejet pour les méthodes images (on a plus la symétrie), rajouter des Q(x,y)/Q(y,x) (Q=densité gaussienne)
 critères de comparaison des méthodes à lambda fixé:
