@@ -173,7 +173,9 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
 
     L1_tab = np.zeros(int(niter+1))
     L2_tab = np.zeros(int(niter+1))
+    LogPi_tab = np.zeros(int(niter+1))
     L1_tab[0], L2_tab[0] = LogDistributionPi_Full(theta_tab[0,:], Y, A, D, sh, Lambda)
+    LogPi_tab[0] = L1_tab[0] + L2_tab[0]
 
     # for plotting
 
@@ -221,6 +223,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
             
         theta_tab[i+1,:]=theta
         L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
+        LogPi_tab[i+1] = L1_tab[i+1] + L2_tab[i+1]
         theta_tilde_tab[i+1,:]=D@theta
 
     theta_mean = theta_mean/cnt
@@ -228,7 +231,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     accepts = np.array(accepts)
     gammas = np.array(gammas)
         
-    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab, LogPi_tab
 
 def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     
