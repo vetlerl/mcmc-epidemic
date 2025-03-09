@@ -11,6 +11,7 @@ import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
 
+
 #Global variables
 a=1
 b=2
@@ -198,7 +199,11 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
             mu = theta
             
         candidate = npr.multivariate_normal(mu, gamma*C)
-        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        if(method=="source" or method=="image"):
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        else:
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C)
+            
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
@@ -207,6 +212,9 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
             if tmp <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
+                if LogDistributionPi(candidate, Y, A, D, sh, Lambda)<-10 :
+                    print(LogDistributionPi(candidate, Y, A, D, sh, Lambda))
+                    
         # burn-in
         if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
             gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
@@ -281,7 +289,11 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
             mu = theta
         
         candidate = npr.multivariate_normal(mu, gamma*C)
-        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        if(method=="source" or method=="image"):
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        else:
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C))
+            
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
@@ -366,7 +378,12 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
             mu = theta
             
         candidate = npr.multivariate_normal(mu, gamma*C)
-        log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        
+        if(method=="source" or method=="image"):
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        else:
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C))
+            
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
@@ -386,9 +403,6 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
             converge+=1
             wait_conv= converge<2e-4*niter
             gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            if save:
-                gammas.append(gamma)
-                accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0  
         # update theta
         else:
