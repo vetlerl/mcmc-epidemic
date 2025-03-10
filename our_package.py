@@ -153,7 +153,7 @@ def sub_diff(x, sh):
             sub[i] = 0
     return sub
 
-def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
+def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     
     D = BuildD(T)
     gamma = 0.001
@@ -212,8 +212,6 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
             if tmp <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
-                if LogDistributionPi(candidate, Y, A, D, sh, Lambda)<-10 :
-                    print(LogDistributionPi(candidate, Y, A, D, sh, Lambda))
                     
         # burn-in
         if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration

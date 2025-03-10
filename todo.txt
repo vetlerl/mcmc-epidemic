@@ -3,7 +3,7 @@ attendre plus longtemps pour la convergence du taux d'acceptation/gamma ✅
 voir pourquoi MH accepte des points dont la log densité est très basse pour la méthode source (peut-être pour les autres?) ❓ Hypothèse basée sur des affichages de valeur de la log-densité : l'algorithme se coince dans des cuvettes dont il a du mal à sortir => les petits progrès sont encouragés mais font que la chaîne reste dans la cuve. Observé sur les méthodes "source" et "image". Reste à voir si le problème demeure avec les méthodes subdiff.
 changer l'acceptation rejet pour les méthodes images (on a plus la symétrie), rajouter des Q(x,y)/Q(y,x) (Q=densité gaussienne) ✅
 critères de comparaison des méthodes à lambda fixé:
-- distance entre theta_courant et argmax en fonction des itérations (normalisé par la norme de l'argmax)
+- distance entre theta_courant et argmax en fonction des itérations (normalisé par la norme de l'argmax) ✅
 - la même chose en évaluant en log pi
 voir poly optimisation pour propriété du Prox (existence et unicité)
 (espace source) Méthode du prox pour la moyenne de la gaussienne => calculer le prox de gamma*f 
