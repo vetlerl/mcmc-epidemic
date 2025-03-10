@@ -194,7 +194,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
     for i in range(int(niter)):
         
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
         else:
             mu = theta
             
@@ -202,7 +202,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C)
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
@@ -284,7 +284,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     for i in range(int(niter)):
 
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
         else:
             mu = theta
         
@@ -292,7 +292,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C))
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
@@ -335,6 +335,9 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         
     return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean
 
+def CalculSubdiff(theta, gamma, A, Y, D, sh):
+    return theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
     estimates theta and theta_tilde using the Metropolis Hastings algorithm (MH), with burn-in
@@ -373,7 +376,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     for i in range(1,int(niter)+1):
 
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
         else:
             mu = theta
             
@@ -382,7 +385,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(theta, mu, gamma*C))
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
