@@ -194,7 +194,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     for i in range(int(niter)):
         
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
             
@@ -202,7 +202,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
@@ -229,13 +229,12 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
             gammas.append(gamma)
             accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
-        else:
-            theta_mean += theta
-            cnt += 1
-            
-            theta_tab[i+1,:]=theta
-            L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
-            theta_tilde_tab[i+1,:]=D@theta
+        
+        theta_mean += theta
+        cnt += 1
+        theta_tab[i+1,:]=theta
+        L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
+        theta_tilde_tab[i+1,:]=D@theta
 
     theta_mean = theta_mean/cnt
     
@@ -282,7 +281,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     for i in range(int(niter)):
 
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
         
@@ -290,7 +289,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
@@ -310,6 +309,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
                 gammas.append(gamma)
                 accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
+            
         elif wait_conv and ((i+1) % 1000) == 0:
             converge+=1
             wait_conv= converge<2e-4*niter
@@ -319,11 +319,11 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
                 accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
             acceptance_cnt=0
-        else:
-            theta_mean += theta
-            cnt += 1
-            theta_tab.append(theta)
-            theta_tilde_tab.append(D@theta)
+        
+        theta_mean += theta
+        cnt += 1
+        theta_tab.append(theta)
+        theta_tilde_tab.append(D@theta)
 
     theta_mean = theta_mean/cnt
     
@@ -333,8 +333,8 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         
     return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean
 
-def CalculSubdiff(theta, gamma, A, Y, D, sh):
-    return theta - (gamma/2)*(A.T)@(Y-A@theta) - (gamma/2)*(D.T)@(sub_diff(D@theta, sh))
+def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
+    return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
 
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
@@ -374,7 +374,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     for i in range(1,int(niter)+1):
 
         if (method=="subdiff_source" or method=="subdiff_image") :
-            mu = CalculSubdiff(theta, gamma, A, Y, D, sh)
+            mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
             
@@ -383,7 +383,7 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
         if(method=="source" or method=="image"):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh), gamma*C))
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
             
         if log_alpha >=0 :
             theta = candidate
@@ -406,9 +406,8 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
             gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
             acceptance_cnt=0  
         # update theta
-        else:
-            theta_mean += theta
-            cnt += 1
+        theta_mean += theta
+        cnt += 1
             
     theta_mean = theta_mean/cnt
     theta,theta_tilde = theta_mean, D@theta_mean
