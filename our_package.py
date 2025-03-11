@@ -318,7 +318,6 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
                 gammas.append(gamma)
                 accepts.append(acceptance_cnt/1000)
             acceptance_cnt=0
-            acceptance_cnt=0
         
         theta_mean += theta
         cnt += 1
