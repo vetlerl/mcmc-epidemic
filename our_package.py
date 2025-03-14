@@ -11,11 +11,6 @@ import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
 
-
-#Global variables
-a=1
-b=2
-
 #D
 def BuildD(T):
     k = [np.ones(T),-2*np.ones(T-1),np.ones(T-2)]
@@ -32,7 +27,7 @@ def BuildA(Delta,Vt):
     A = np.diag(Delta) @ Vt
     return A
 #sh
-def Buildsh(T,a,b):
+def Buildsh(T,a=1,b=2):
     sh = np.zeros(T)
     sh[0] = (a-2*b)/4
     sh[1] = b/2
@@ -127,6 +122,13 @@ def ComputeQuantiles(T, Lambda, s, Y, niter=1e5): # Fonction de répartition et 
         
     return quantiles
 
+#Return the quantiles q (possibly an array of quantiles) of the array sim_tab
+def Quantiles(sim_tab,q,T):
+    quantiles_tab=np.zeros((len(q),T))
+    for i in range(len(q)):
+        quantiles_tab[i,:]=np.percentile(sim_tab,q[i],axis=0)
+    return quantiles_tab
+
 def DistributionPi(x, Y, A, D, sh, Lambda):
     return np.exp((-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1))
 
@@ -161,7 +163,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta = np.ones(T) # maybe choose another starting point
+    theta = 10*np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
     sum_theta = theta
     theta_tab = np.zeros((int(niter+1), T))
@@ -173,6 +175,9 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
+    is_source=method in ["source", "subdiff_source"]
+    is_image=method in ["image", "subdiff_image"]
+    is_subdiff="subdiff" in method
 
     L1_tab = np.zeros(int(niter+1))
     L2_tab = np.zeros(int(niter+1))
@@ -183,23 +188,23 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     gammas = [gamma]
     accepts = []
     
-    if (method=="image" or method=="subdiff_image"):
+    if is_image:
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif (method=="source" or method=="subdiff_source"):
+    elif is_source:
         C = np.identity(T)
     else:
         raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(int(niter)):
         
-        if (method=="subdiff_source" or method=="subdiff_image") :
+        if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
             
         candidate = npr.multivariate_normal(mu, gamma*C)
-        if(method=="source" or method=="image"):
+        if not(is_subdiff):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
@@ -214,21 +219,21 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
                 acceptance_cnt += 1
                     
         # burn-in
-        if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
-            wait_conv=not(burn_in)
-            # save
-            gammas.append(gamma)
-            accepts.append(acceptance_cnt/1000)
-            acceptance_cnt=0
-        elif wait_conv and ((i+1) % 1000) == 0:
-            converge+=1
-            wait_conv= converge<2e-4*niter
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            gammas.append(gamma)
-            accepts.append(acceptance_cnt/1000)
-            acceptance_cnt=0
+        if ((i+1) % 1000) == 0:
+            if burn_in:
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                burn_in = abs(acceptance_cnt / 1000 - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
+            if save:
+                gammas.append(gamma)
+                accepts.append(acceptance_cnt / 1000)
+            acceptance_cnt = 0
         
         theta_mean += theta
         cnt += 1
@@ -241,7 +246,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     accepts = np.array(accepts)
     gammas = np.array(gammas)
         
-    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab,end_burn_in
 
 def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     
@@ -251,7 +256,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta = np.ones(T) # maybe choose another starting point
+    theta = 10*np.ones(T) # maybe choose another starting point
     acceptance_cnt = 0
     sum_theta = theta
     theta_tab = [theta]
@@ -261,7 +266,10 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
-
+    is_source=method in ["source", "subdiff_source"]
+    is_image=method in ["image", "subdiff_image"]
+    is_subdiff="subdiff" in method
+    
     # for plotting
     if save:
         gammas = [gamma]
@@ -270,23 +278,23 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         gammas = None
         accepts = None
         
-    if (method=="image" or method=="subdiff_image"):
+    if is_image:
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif (method=="source" or method=="subdiff_source"):
+    elif is_source:
         C = np.identity(T)
     else:
         raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(int(niter)):
 
-        if (method=="subdiff_source" or method=="subdiff_image") :
+        if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
         
         candidate = npr.multivariate_normal(mu, gamma*C)
-        if(method=="source" or method=="image"):
+        if not(is_subdiff):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
@@ -300,25 +308,22 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
                 theta = candidate
                 acceptance_cnt += 1
         # burn-in
-        if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
-            wait_conv=not(burn_in)
-            # save
+        if ((i+1) % 1000) == 0:
+            if burn_in:
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                burn_in = abs(acceptance_cnt / 1000 - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
             if save:
                 gammas.append(gamma)
-                accepts.append(acceptance_cnt/1000)
-            acceptance_cnt=0
+                accepts.append(acceptance_cnt / 1000)
+            acceptance_cnt = 0
             
-        elif wait_conv and ((i+1) % 1000) == 0:
-            converge+=1
-            wait_conv= converge<2e-4*niter
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            if save:
-                gammas.append(gamma)
-                accepts.append(acceptance_cnt/1000)
-            acceptance_cnt=0
-        
         theta_mean += theta
         cnt += 1
         theta_tab.append(theta)
@@ -330,7 +335,7 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         accepts = np.array(accepts)
         gammas = np.array(gammas)
         
-    return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean
+    return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean,end_burn_in
 
 def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
     return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
@@ -357,29 +362,32 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     acceptance_cnt = 0
     burn_in = True
     wait_conv=False
-    theta = np.ones(T)
+    theta = 10*np.ones(T)
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
+    is_source=method in ["source", "subdiff_source"]
+    is_image=method in ["image", "subdiff_image"]
+    is_subdiff="subdiff" in method
     
-    if (method=="image" or method=="subdiff_image"):
+    if is_source:
+        C = np.identity(T)
+    elif is_image:
         D_1 = npl.solve(D,np.identity(T))
         C = D_1@D_1.T
-    elif (method=="source" or method=="subdiff_source"):
-        C = np.identity(T)
     else:
         raise Exception("method must be either 'source' or 'image' (subdiff or not)")
         
     for i in range(1,int(niter)+1):
 
-        if (method=="subdiff_source" or method=="subdiff_image") :
+        if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
         else:
             mu = theta
             
         candidate = npr.multivariate_normal(mu, gamma*C)
         
-        if(method=="source" or method=="image"):
+        if not(is_subdiff):
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
         else:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
@@ -393,17 +401,19 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
                 theta = candidate
                 acceptance_cnt += 1
         # burn-in
-        if burn_in and ((i+1) % 1000) == 0 : # every 1000th iteration
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            burn_in = abs(acceptance_cnt/1000-accept_final)>1e-2 # acceptable rate, stop adjusting gamma
-            acceptance_cnt=0
-            wait_conv=not(burn_in)
-            
-        elif wait_conv and ((i+1) % 1000) == 0:
-            converge+=1
-            wait_conv= converge<2e-4*niter
-            gamma = gamma + (acceptance_cnt/1000 - accept_final)*gamma
-            acceptance_cnt=0  
+        if ((i+1) % 1000) == 0:
+            if burn_in:
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                burn_in = abs(acceptance_cnt / 1000 - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (acceptance_cnt / 1000 - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
+            acceptance_cnt = 0
+
         # update theta
         theta_mean += theta
         cnt += 1
@@ -414,12 +424,5 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     return theta, theta_tilde
 
 
-    
-#Return the quantiles q (possibly an array of quantiles) of the array sim_tab
-def Quantiles(sim_tab,q,T):
-    quantiles_tab=np.zeros((len(q),T))
-    for i in range(len(q)):
-        quantiles_tab[i,:]=np.percentile(sim_tab,q[i],axis=0)
-    return quantiles_tab
 
 
