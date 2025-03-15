@@ -11,6 +11,9 @@ import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
 
+a=1
+b=2
+
 #D
 def BuildD(T):
     k = [np.ones(T),-2*np.ones(T-1),np.ones(T-2)]
@@ -41,7 +44,7 @@ def Computation_Y(T, Lambda):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     
-    sh = Buildsh(T, a, b)
+    sh = Buildsh(T)
     
     
     x_tilde_true = np.zeros(T)
