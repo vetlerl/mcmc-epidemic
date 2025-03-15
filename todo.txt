@@ -1,13 +1,9 @@
 TO DO:✅
-voir pourquoi MH accepte des points dont la log densité est très basse pour la méthode source (peut-être pour les autres?) ❓ Hypothèse basée sur des affichages de valeur de la log-densité : l'algorithme se coince dans des cuvettes dont il a du mal à sortir => les petits progrès sont encouragés mais font que la chaîne reste dans la cuve. Observé sur les méthodes "source" et "image". Reste à voir si le problème demeure avec les méthodes subdiff.
-critères de comparaison des méthodes à lambda fixé:
-- distance entre theta_courant et argmax en fonction des itérations (normalisé par la norme de l'argmax) ✅
-- la même chose en évaluant en log pi ✅
-Voir ce qu'il se passe en dimension supérieure (T=20 par exemple), est ce que la logdistributionpi de la chaîne simulé est meilleure
-Retourner l'indice de fin de burn in et le rajouter dans les plots de simulation ✅
-Changer la valeur initial (vecteur de 0) par une mauvaise valeur ❓ (voir pour la changer encore plus, ça a déjà amélioré un peu le comportement en début de burn in )
-Faire des simulations avec plus d'itérations pour voir si il y a une meilleure convergence
-Regarder si les tests de conditions "if" ont un impact notable ou non sur le temps de d'éxécution des algos ✅
-Mettre en place les méthode du Prox
-(espace source) Méthode du prox pour la moyenne de la gaussienne => calculer le prox de gamma*f 
-(espace Image) Méthode du prox pour la moyenne de la gaussienne => calculer le prox de gamma*g 
+Etude de convexité de la distribution pi ✅ : pi est concave, pas de phénomène de cuvette
+Tester le pour des T plus grand que 5
+Debugger les graphes montrant la différence entre argmax et sim ✅ plus ou moins fait
+Pourquoi y-a-t-il un comportement périodique dans la phase de burn-in ✅ fait lors de la séance (problème dans le if du burn-in qui ne prenait pas en compte la valeur toutes les 1000 itérations)
+Fixer le burn-in ou le renvoyer l'itération où il s'arrête ✅ On renvoie bien la fin du burn-in
+Trouver un mauvais point initial, pour pouvoir bien étudier la convergence ✅ Fait par Paul, amélioration mais que sur le début de la chaîne?
+Augmenter le nombre d'itérations (1 million?)
+Implémenter la méthode avec le prox? D'abord trouver les expressions théoriques des prox utilisés : partie théorique faite par Arman
