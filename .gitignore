@@ -8,3 +8,6 @@ __pycache__/
 
 #ignore vs code settings
 .vscode/
+
+#ignore images
+*.jpg
