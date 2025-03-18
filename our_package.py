@@ -11,33 +11,54 @@ import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
 
-a=1
-b=2
-
 #D
 def BuildD(T):
     k = [np.ones(T),-2*np.ones(T-1),np.ones(T-2)]
     offset = [0,-1,-2]
     D = diags(k,offset).toarray()/4
     return D
+    
 #U,Delta,V
 def BuildUVDelta(D):
     U, Delta, Vt = npl.svd(D, full_matrices=False)
     return U,Delta,Vt
-
 #A
 def BuildA(Delta,Vt):
     A = np.diag(Delta) @ Vt
     return A
 #sh
-def Buildsh(T,a=1,b=2):
+def Buildsh(T,a,b):
     sh = np.zeros(T)
     sh[0] = (a-2*b)/4
-    sh[1] = b/2
+    sh[1] = b/4
     return sh
 
 #Simulation of a n-sample of Y
-def Computation_Y(T, Lambda):
+def Computation_Y(T, Lambda, param_accept = 2/T):
+
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T)
+    
+    rd = npr.uniform(0, 1, T)
+    x_tilde_true = np.where(rd < 0.3, npr.exponential(1/Lambda, T), 0)*(2*npr.binomial(T,1/2) - 1) - sh   ### 1/Lambda
+    x_true = npl.solve(D, x_tilde_true)
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    
+    """
+    x_tilde_true = np.zeros(T)
+    for i in range(T) : # probably a more efficient way to do that
+        rd = npr.uniform(0,1)
+        if(rd<param_accept):
+            x_tilde_true[i] = npr.exponential(1/Lambda)*(2*npr.binomial(1,1/2) - 1) - sh[i]
+
+    x_true = npl.solve(D, x_tilde_true)
+    Y = npr.multivariate_normal(A@x_true, np.identity(T))
+    """
+    return Y
+"""
+def Computation_Y_debug(T, Lambda, param_accept = 2/T):
 
     D = BuildD(T)
     
@@ -50,15 +71,15 @@ def Computation_Y(T, Lambda):
     x_tilde_true = np.zeros(T)
     for i in range(T) : # probably a more efficient way to do that
         rd = npr.uniform(0,1)
-        if(rd<0.3):
-            x_tilde_true[i] = npr.exponential(Lambda)
+        if(rd<param_accept):
+            x_tilde_true[i] = npr.exponential(1/Lambda)*(2*npr.binomial(1,1/2) - 1) - sh[i]
 
     x_true = npl.solve(D, x_tilde_true)
     Y = npr.multivariate_normal(A@x_true, np.identity(T))
     
-    return Y
-
-#Create a dictionnary of simulation of Y for different values of lambda
+    return (Y, x_true, x_tilde_true)
+"""
+#Create a dictionary of simulations of Y for different values of lambda parameter
 def Create_DicoY(T,lambda_tab):
     npr.seed(42)
     Y_simu=dict()
@@ -68,6 +89,7 @@ def Create_DicoY(T,lambda_tab):
 
 #Compute argmax of pi and pi_tilde distributions
 def ComputeArgmax(T,Lambda, Y):
+    
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
@@ -78,7 +100,9 @@ def ComputeArgmax(T,Lambda, Y):
     x=npl.solve(D,x_tilde)
     return x,x_tilde
 
-def ComputeMeans(T, Lambda, Y):
+# Stop here
+
+def ComputeMeans(T, Lambda, Y,a, b):
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     sh = Buildsh(T, a, b)
@@ -87,8 +111,8 @@ def ComputeMeans(T, Lambda, Y):
     mu_minus = U @ Y - Lambda*np.ones(T)
     C_minus = 1 - sps.norm.cdf(-sh-mu_minus)
     gamma = C_plus / (C_plus + C_minus)
-    mu_tilde_plus = mu_plus - np.exp(-((sh+mu_plus)**2)/2) / (np.sqrt(2*np.pi)*C_plus+1e-16)
-    mu_tilde_minus = mu_minus + np.exp(-((sh+mu_minus)**2)/2) / (np.sqrt(2*np.pi)*C_minus+1e-16)
+    mu_tilde_plus = mu_plus - np.exp(-((sh+mu_plus)**2)/2) / (np.sqrt(2*np.pi)*C_plus)
+    mu_tilde_minus = mu_minus + np.exp(-((sh+mu_minus)**2)/2) / (np.sqrt(2*np.pi)*C_minus)
     mu_tilde = gamma*mu_tilde_plus + (1-gamma)*mu_tilde_minus
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
@@ -102,7 +126,7 @@ def ComputeQuantiles(T, Lambda, s, Y, niter=1e5): # Fonction de répartition et 
     C_plus = sps.norm.cdf(-sh-mu_plus)
     mu_minus = U @ Y - Lambda*np.ones(T)
     C_minus = 1 - sps.norm.cdf(-sh-mu_minus)
-    gamma = C_plus / (C_plus + C_minus)
+    gamma = C_plus / (C_plus + C_minus + 1e-16)
     probas = np.zeros((int(niter),T))
     quantiles = np.zeros(T)
     q_plus = 0
@@ -111,10 +135,10 @@ def ComputeQuantiles(T, Lambda, s, Y, niter=1e5): # Fonction de répartition et 
     for i in range(int(niter)):
         ub = -5 + i/1000
         for j in range(T):
-            q_plus = sps.norm.cdf(min(ub-mu_plus[j], -sh[j]-mu_plus[j])) / C_plus[j]
+            q_plus = sps.norm.cdf(min(ub-mu_plus[j], -sh[j]-mu_plus[j])) / (C_plus[j]+1e-16)
             q_minus = 0
             if(ub>-sh[j]):
-                q_minus = (sps.norm.cdf(ub-mu_minus[j]) + C_minus[j] - 1) / C_minus[j]
+                q_minus = (sps.norm.cdf(ub-mu_minus[j]) + C_minus[j] - 1) / (C_minus[j] + 1e-16)
             probas[i,j] = gamma[j]*q_plus + (1 - gamma[j])*q_minus
         
     for k in range(T):
@@ -148,15 +172,7 @@ def LogDistributionPi_Full(x, Y, A, D, sh, Lambda):
     return ((-npl.norm(Y - A@x)**2)/2, -Lambda*npl.norm(D@x + sh,ord=1))
 
 def sub_diff(x, sh):
-    sub = np.zeros(len(x))
-    for i in range(len(x)):
-        if(x[i]+sh[i]>0):
-            sub[i] = 1
-        elif(x[i]+sh[i]<0):
-            sub[i] = -1
-        else:
-            sub[i] = 0
-    return sub
+    return np.sign(x+sh)
 
 def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
     return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
