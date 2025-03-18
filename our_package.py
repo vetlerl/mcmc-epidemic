@@ -158,7 +158,14 @@ def sub_diff(x, sh):
             sub[i] = 0
     return sub
 
-def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
+def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
+    return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
+
+def CalculDrift(theta, gamma, Lambda, A, Y, D, sh):
+    tmp = D@theta - 2*gamma*A.T@(A@D@theta - Y) + sh
+    return -sh + np.sign(tmp)*np.maximum(np.abs(tmp)-gamma*Lambda*np.ones(tmp.shape[0]),np.zeros(tmp.shape[0]))
+
+def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",save=True):
     
     D = BuildD(T)
     gamma = 0.001
@@ -178,8 +185,8 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
-    is_source=method in ["source", "subdiff_source"]
-    is_image=method in ["image", "subdiff_image"]
+    is_source=method in ["source", "subdiff_source", "prox_source"]
+    is_image=method in ["image", "subdiff_image", "prox_image"]
     is_subdiff="subdiff" in method
 
     L1_tab = np.zeros(int(niter+1))
@@ -197,7 +204,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source"):
     elif is_source:
         C = np.identity(T)
     else:
-        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+        raise Exception("method must be either 'source' or 'image' (subdiff, prox, or not)")
         
     for i in range(int(niter)):
         
@@ -340,9 +347,6 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         
     return np.array(theta_tab),np.array(theta_tilde_tab), accepts, gammas, theta_mean,end_burn_in
 
-def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
-    return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
-
 def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     """
     estimates theta and theta_tilde using the Metropolis Hastings algorithm (MH), with burn-in
@@ -369,9 +373,10 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
-    is_source=method in ["source", "subdiff_source"]
-    is_image=method in ["image", "subdiff_image"]
+    is_source=method in ["source", "subdiff_source", "prox_source"]
+    is_image=method in ["image", "subdiff_image", "prox_image"]
     is_subdiff="subdiff" in method
+    is_prox="prox" in method
     
     if is_source:
         C = np.identity(T)
@@ -385,15 +390,21 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
 
         if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
+        elif is_prox:
+            mu = CalculDrift(theta, gamma, Lambda, A, Y, D, sh)
         else:
             mu = theta
             
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = npr.multivariate_normal(mu, gamma*C if not is_prox else 2*gamma*C)
         
-        if not(is_subdiff):
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
-        else:
+        if is_subdiff:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
+        
+        elif is_prox:
+            log_alpha = -1/2*(npl.norm(U@Y - D@candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) + 1/2*(npl.norm(U@Y - theta)**2 - Lambda*npl.norm(theta + sh,ord=1)) - 1/(4*gamma)*npl.norm(candidate - CalculDrift(theta, gamma, Lambda, A, Y, D, sh))**2 + 1/(4*gamma)*npl.norm(theta - CalculDrift(candidate, gamma, Lambda, A, Y, D, sh))**2
+        
+        else:
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
             
         if log_alpha >=0 :
             theta = candidate
@@ -426,6 +437,5 @@ def MetropolisHastingsFast(T, Lambda, Y, niter=1e5, method="source"):
 
     return theta, theta_tilde
 
-
-
+    
 
