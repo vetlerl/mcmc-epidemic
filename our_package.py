@@ -43,7 +43,7 @@ def Computation_Y(T, Lambda,a,b):
     sh = Buildsh(T,a,b)
     
     rd = npr.uniform(0, 1, T)
-    x_tilde_true = np.where(rd < param_accept, npr.exponential(1/Lambda, T), 0)*(2*npr.binomial(1,1/2,T) - 1) - sh   ### 1/Lambda
+    x_tilde_true = np.where(rd < param_accept, npr.exponential(1/Lambda, T), 0)*(2*npr.binomial(1,1/2,T) - 1) - sh   
     x_true = npl.solve(D, x_tilde_true)
     Y = npr.multivariate_normal(A @ x_true, np.identity(T))
     
@@ -159,7 +159,7 @@ def LogDistributionPi(x, Y, A, D, sh, Lambda):
     return (-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
 
 def LogDistributionPi_Tab(x_tab, Y, A, D, sh, Lambda):
-    l_tab = np.empty_like(x_tab)
+    l_tab = np.empty(np.shape(x_tab)[0])
     for i,xi in enumerate(x_tab):
         l_tab[i] = LogDistributionPi(xi,Y,A,D,sh,Lambda)
             #(-npl.norm(self.Y - self.A@xi)**2)/2 - self.Lambda * npl.norm(self.D@xi + self.sh,ord=1)
@@ -185,7 +185,8 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
     theta = 10*np.ones(T) # maybe choose another starting point
-
+    end_burn_in=None
+    
     # Covariance matrix C
     if is_image:
         D_1 = npl.solve(D, np.identity(T))
@@ -263,7 +264,7 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
-                wait_conv = converge < 2e-4 * niter
+                wait_conv = converge < 1e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
@@ -273,8 +274,6 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
             cpt += 1
             acceptance_cnt = 0
         
-        theta_mean += theta
-        cnt += 1
         theta_tab[i+1,:]=theta
         L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
         theta_tilde_tab[i+1,:]=D@theta
@@ -319,7 +318,8 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta = 10*np.ones(T) # maybe choose another starting point
+    theta = np.zeros(T)#10*np.ones(T) # maybe choose another starting point
+    end_burn_in=None
 
     # Covariance matrix C
     if is_image:
@@ -394,7 +394,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
-                wait_conv = converge < 2e-4 * niter
+                wait_conv = converge < 1e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
@@ -473,7 +473,8 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
     theta = 10*np.ones(T) # maybe choose another starting point
-
+    end_burn_in=None
+    
     # Covariance matrix C
     if is_image:
         D_1 = npl.solve(D, np.identity(T))
@@ -547,7 +548,7 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
-                wait_conv = converge < 2e-4 * niter
+                wait_conv = converge < 1e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
@@ -558,8 +559,6 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
                 cpt += 1
             acceptance_cnt = 0
         
-        theta_mean += theta
-        cnt += 1
 
     if end_burn_in is None:
         raise ValueError("More iterations required")
