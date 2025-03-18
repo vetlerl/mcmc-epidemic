@@ -24,7 +24,6 @@ def BuildD(T):
 def BuildUVDelta(D):
     U, Delta, Vt = npl.svd(D, full_matrices=False)
     return U,Delta,Vt
-
 #A
 def BuildA(Delta,Vt):
     A = np.diag(Delta) @ Vt
