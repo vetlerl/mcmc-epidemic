@@ -11,6 +11,9 @@ import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
 
+a=1
+b=2
+
 #D
 def BuildD(T):
     k = [np.ones(T),-2*np.ones(T-1),np.ones(T-2)]
@@ -27,19 +30,19 @@ def BuildA(Delta,Vt):
     A = np.diag(Delta) @ Vt
     return A
 #sh
-def Buildsh(T,a,b):
+def Buildsh(T,a=1,b=2):
     sh = np.zeros(T)
     sh[0] = (a-2*b)/4
     sh[1] = b/4
     return sh
 
 #Simulation of a n-sample of Y
-def Computation_Y(T, Lambda, param_accept = 2/T):
-
+def Computation_Y(T, Lambda, param_accept = 0.3):
+    
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
-    sh = Buildsh(T)
+    sh = Buildsh(T,a,b)
     
     rd = npr.uniform(0, 1, T)
     x_tilde_true = np.where(rd < 0.3, npr.exponential(1/Lambda, T), 0)*(2*npr.binomial(T,1/2) - 1) - sh   ### 1/Lambda
@@ -177,9 +180,18 @@ def sub_diff(x, sh):
 def CalculSubdiff(theta, gamma, A, Y, D, sh, C):
     return theta - (1/2)*gamma*C@(A.T)@(Y-A@theta) - (gamma/2)*C@(D.T)@(sub_diff(D@theta, sh))
 
-def CalculDrift(theta, gamma, Lambda, A, Y, D, sh):
-    tmp = D@theta - 2*gamma*A.T@(A@D@theta - Y) + sh
-    return -sh + np.sign(tmp)*np.maximum(np.abs(tmp)-gamma*Lambda*np.ones(tmp.shape[0]),np.zeros(tmp.shape[0]))
+def DriftSource(theta, gamma, Lambda, A, Y, D, sh):
+    N = len(theta)
+    tau = gamma*A.T@Y + theta - gamma*Lambda*D.T@sub_diff(D@theta,sh) 
+    B = npl.solve(gamma*A.T@A.T+np.identity(N),np.identity(N))
+    return B@tau
+
+def DriftImage(theta_tilde, gamma, Lambda, A, Y, D, sh):
+    U,Delta,Vt = BuildUVDelta(D)
+    N = len(theta_tilde)
+    nabla_f = -gamma*(U@Y-theta_tilde)#A.T@(A@theta_tilde - Y)
+    tau = theta_tilde - gamma*nabla_f + sh
+    return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma, np.zeros(N))
 
 def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",save=True):
     
@@ -204,7 +216,7 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",save=True):
     is_source=method in ["source", "subdiff_source", "prox_source"]
     is_image=method in ["image", "subdiff_image", "prox_image"]
     is_subdiff="subdiff" in method
-
+    is_prox = "prox" in method
     L1_tab = np.zeros(int(niter+1))
     L2_tab = np.zeros(int(niter+1))
     L1_tab[0], L2_tab[0] = LogDistributionPi_Full(theta_tab[0,:], Y, A, D, sh, Lambda)
@@ -221,19 +233,32 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",save=True):
         C = np.identity(T)
     else:
         raise Exception("method must be either 'source' or 'image' (subdiff, prox, or not)")
-        
+
+    if is_prox:
+        C = np.identity(T)*2
+    
     for i in range(int(niter)):
         
         if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
+        elif is_prox:
+            mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
         else:
             mu = theta
             
         candidate = npr.multivariate_normal(mu, gamma*C)
-        if not(is_subdiff):
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
-        else:
+        
+        if is_subdiff:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
+        elif is_prox:
+            log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1))
+            +1/2*(npl.norm(U@Y - theta)**2 - Lambda*npl.norm(theta + sh,ord=1))
+            -1/(4*gamma)*npl.norm(candidate - DriftSource(theta, gamma, Lambda, A, Y, D, sh))**2
+            +1/(4*gamma)*npl.norm(theta - DriftSource(candidate, gamma, Lambda, A, Y, D, sh))**2
+        else:    
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        
+            
             
         if log_alpha >=0 :
             theta = candidate
@@ -274,6 +299,86 @@ def MetropolisHastingsFull(T, Lambda, Y, niter=1e5,method="source",save=True):
         
     return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab,end_burn_in
 
+def MH_Prox_Image(T, Lambda, Y, niter=1e5, save=True):
+    
+    D = BuildD(T)
+    gamma = 0.001
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta_tilde = 10*np.ones(T) # maybe choose another starting point
+    theta_tilde_tab = []
+    theta_tilde_mean = np.zeros(T)
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    end_burn_in = 0
+    burn_in = True
+    wait_conv=False
+    burn_in = True
+    converge = False
+    
+    # for plotting
+    if save:
+        gammas = [gamma]
+        accepts = []
+    else:
+        gammas = None
+        accepts = None
+
+    C = 2*gamma*np.identity(T)
+
+    for i in range(int(niter)):
+        
+        mu = DriftImage(theta_tilde, gamma, Lambda, A, Y, D, sh)
+        # print(f"mu={mu}")
+        candidate = npr.multivariate_normal(mu, C)
+
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1))
+        +1/2*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1))
+        -1/(4*gamma)*npl.norm(candidate - DriftSource(theta_tilde, gamma, Lambda, A, Y, D, sh))**2
+        +1/(4*gamma)*npl.norm(theta_tilde - DriftSource(candidate, gamma, Lambda, A, Y, D, sh))**2
+
+        if log_alpha >=0 :
+            theta_tilde = candidate
+            accept_cnt += 1
+        else:
+            tmp = npr.uniform()
+            if tmp <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+                acceptance_cnt += 1
+
+        # burn in
+        if ((i+1) % 1000) == 0:
+            if burn_in:
+                gamma += (accept_cnt / 1000 - accept_final) * gamma
+                burn_in = abs(accept_cnt / 1000 - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_cnt / 1000 - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
+            if save:
+                gammas.append(gamma)
+                accepts.append(accept_cnt / 1000)
+            accept_cnt = 0
+        
+        theta_tilde_mean += theta_tilde
+        cnt += 1
+        theta_tilde_tab.append(theta_tilde)
+
+    theta_tilde_mean = theta_tilde_mean/cnt
+    
+    if save:
+        accepts = np.array(accepts)
+        gammas = np.array(gammas)
+        
+    return np.array(theta_tilde_tab), accepts, gammas, theta_tilde_mean,end_burn_in
+    
+
 def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     
     D = BuildD(T)
@@ -292,9 +397,11 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
     theta_mean = np.zeros(T)
     cnt = 0
     converge=0
-    is_source=method in ["source", "subdiff_source"]
-    is_image=method in ["image", "subdiff_image"]
+    is_source=method in ["source", "subdiff_source","prox_source"]
+    is_image=method in ["image", "subdiff_image","prox_image"]
     is_subdiff="subdiff" in method
+    is_prox = "prox" in method
+    end_burn_in = 0
     
     # for plotting
     if save:
@@ -311,19 +418,32 @@ def MetropolisHastings(T, Lambda, Y, niter=1e5,method="source", save=True):
         C = np.identity(T)
     else:
         raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+
+    if is_prox:
+        C = np.identity(T)*2
+        print("prox detected")
         
     for i in range(int(niter)):
 
         if is_subdiff :
             mu = CalculSubdiff(theta, gamma, A, Y, D, sh, C)
+        elif is_prox:
+            mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
         else:
             mu = theta
         
         candidate = npr.multivariate_normal(mu, gamma*C)
-        if not(is_subdiff):
-            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
-        else:
+        
+        if is_subdiff:
             log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*C))-LogDistributionPi(theta, Y, A, D, sh, Lambda) + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(candidate, gamma, A, Y, D, sh, C), gamma*C))
+        elif is_prox:
+            log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1))
+            +1/2*(npl.norm(U@Y - theta)**2 - Lambda*npl.norm(theta + sh,ord=1))
+            -1/(4*gamma)*npl.norm(candidate - DriftSource(theta, gamma, Lambda, A, Y, D, sh))**2
+            +1/(4*gamma)*npl.norm(theta - DriftSource(candidate, gamma, Lambda, A, Y, D, sh))**2
+        else:    
+            log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda)-LogDistributionPi(theta, Y, A, D, sh, Lambda)
+        
             
         if log_alpha >=0 :
             theta = candidate
