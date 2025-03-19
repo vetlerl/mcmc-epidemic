@@ -526,11 +526,11 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
     accepts[cpt] = 0
 
     # burn-in loop
-    for i in range(int(niter)/2):
+    for i in range(int(niter/2)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
-        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
             
         if log_alpha >=0 :
             theta = candidate
@@ -554,22 +554,22 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
                 if not(wait_conv):
                     end_burn_in=i
                    
-            if save:
-                gammas[cpt] = gamma
-                accepts[cpt] = accept_rate
-                cpt += 1
+           
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
             acceptance_cnt = 0
         
 
-    if end_burn_in is None:
-        raise ValueError("More iterations required")
+    if(wait_conv):
+        end_burn_in=int(niter/2)
     print("End of the burn-in")
 
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
-        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
