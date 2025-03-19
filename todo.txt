@@ -1,9 +1,8 @@
-TO DO:✅
-Etude de convexité de la distribution pi ✅ : pi est concave, pas de phénomène de cuvette
-Tester le pour des T plus grand que 5
-Debugger les graphes montrant la différence entre argmax et sim ✅ plus ou moins fait
-Pourquoi y-a-t-il un comportement périodique dans la phase de burn-in ✅ fait lors de la séance (problème dans le if du burn-in qui ne prenait pas en compte la valeur toutes les 1000 itérations)
-Fixer le burn-in ou le renvoyer l'itération où il s'arrête ✅ On renvoie bien la fin du burn-in
-Trouver un mauvais point initial, pour pouvoir bien étudier la convergence ✅ Fait par Paul, amélioration mais que sur le début de la chaîne?
-Augmenter le nombre d'itérations (1 million?)
-Implémenter la méthode avec le prox? D'abord trouver les expressions théoriques des prox utilisés : partie théorique faite par Arman
+TO DO:
+
+Implémenter le MH avec prox tel qu'expliqué dans le Toy Example
+Continuer le nettoyage et l'uniformisation du fichier graphics
+Algorithme pour le choix optimal de Lambda de façon à ce que log-pi ne soit pas trop plate mais aussi que l'on ait un x_true pas trop linéaire dans la visualisation du premier graphe ?
+Faire tourner Source et Image pour Lambda grand et regarder le critère de distance sur les theta si on obtient des plots satisfaisants (descente puis oscillation)
+Implémenter le critère de qualité distance de la moyenne des theta par rapport à la moyenne théorique
+Implémenter le critère de qualité quantiles des theta par rapport aux quantiles théoriques

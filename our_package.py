@@ -407,8 +407,9 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         theta_tab[i+1,:]=theta
         theta_tilde_tab[i+1,:]=D@theta
 
-    if end_burn_in is None:
-        raise ValueError("More iterations required")
+    if(wait_conv):
+        end_burn_in=int(niter/2)
+    
     print("End of the burn-in")
 
     ## convergence loop
