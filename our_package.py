@@ -559,7 +559,6 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
             accepts[cpt] = accept_rate
             cpt += 1
             acceptance_cnt = 0
-        
 
     if(wait_conv):
         end_burn_in=int(niter/2)
@@ -586,6 +585,118 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
         
     return theta,theta_tilde
 
+def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
+    
+    D = BuildD(T)
+    gamma = 0.001
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta_tilde = np.ones(T) # maybe choose another starting point
+    #theta_tilde_tab = []
+    end_burn_in = False
+    theta_tilde_mean = np.zeros(T)
 
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=npl.solve(D, theta_tilde)
+    theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde_tab[0,:]=theta_tilde
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    end_burn_in = 0
+    burn_in = True
+    wait_conv=False
+    converge = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    # for plotting
 
+    cpt = 0
+    gammas = np.empty(int(niter/2))
+    gammas[cpt] = gamma
+    accepts = np.empty(int(niter/2))
+    accepts[cpt] = 0
+
+    C = 2*gamma*np.identity(T)
+
+    for i in range(int(niter/2)):
+        
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        # print(f"mu={mu}")
+        candidate = npr.multivariate_normal(mu, C)
+
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +1/2*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+
+        if log_alpha >=0 :
+            theta_tilde = candidate
+            accept_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+                accept_cnt += 1
+
+        # burn in
+        if ((i+1) % 1000) == 0:
+            print("log_alpha : ", log_alpha)
+            print("taux d'accept", accept_cnt/1000)
+            print("mu :", mu)
+            if burn_in:
+                gamma += (accept_cnt / 1000 - accept_final) * gamma
+                burn_in = abs(accept_cnt / 1000 - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_cnt / 1000 - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
+        
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_cnt/1000
+            cpt += 1
+            accept_cnt = 0
+
+        theta_tilde_tab[i+1,:] = theta_tilde
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde_tab[i+1,:])
+        
+    if(wait_conv):
+        end_burn_in=int(niter/2)
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(end_burn_in,int(niter)):
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +1/2*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        
+        if log_alpha >=0 :
+            theta_tilde = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+
+        theta_tilde_tab[i+1,:] = theta_tilde
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde_tab[i+1,:])
+            
+        theta_tilde_mean += theta_tilde
+        cnt += 1
+    
+    theta_tilde_mean /= cnt
+        
+    return theta_tab, theta_tilde_tab, accepts, gammas, theta_tilde_mean,end_burn_in
+
+def DriftSource(theta, gamma, Lambda, A, Y, D, sh):
+    N = len(theta)
+    tau = gamma*A.T@Y + theta - gamma*Lambda*D.T@sub_diff(D@theta,sh) 
+    B = npl.solve(gamma*A.T@A.T+np.identity(N),np.identity(N))
+    return B@tau
+
+def DriftImage(theta_tilde, gamma, Lambda, U, Y, sh):
+    N = len(theta_tilde)
+    nabla_f = -(U@Y-theta_tilde)#A.T@(A@theta_tilde - Y)
+    tau = theta_tilde - gamma*nabla_f + sh
+    return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*np.ones(N), np.zeros(N))
 
