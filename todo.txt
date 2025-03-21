@@ -7,4 +7,4 @@ Faire tourner Source et Image pour Lambda grand et regarder le critère de dista
 Implémenter le critère de qualité distance de la moyenne des theta par rapport à la moyenne théorique
 Implémenter le critère de qualité quantiles des theta par rapport aux quantiles théoriques
 Essayer de robustifier le code par rapport aux divisions par zéro pour avoir un fonctionnement même pour lambda > 10
-Prendre connaissance des docs et mails envoyés par Mme Fort au sujet du prior
+Prendre connaissance des docs et mails envoyés par Mme Fort au sujet du prior [DONE] de mon côté
