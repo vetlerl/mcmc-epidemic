@@ -639,9 +639,9 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
 
         # burn in
         if ((i+1) % 1000) == 0:
-            print("log_alpha : ", log_alpha)
-            print("taux d'accept", accept_cnt/1000)
-            print("mu :", mu)
+            #print("log_alpha : ", log_alpha)
+            #print("taux d'accept", accept_cnt/1000)
+            #print("mu :", mu)
             if burn_in:
                 gamma += (accept_cnt / 1000 - accept_final) * gamma
                 burn_in = abs(accept_cnt / 1000 - accept_final) > 1e-2
