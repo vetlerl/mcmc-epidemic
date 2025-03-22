@@ -1,8 +1,8 @@
 TO DO:
 
 Implémenter le MH avec prox tel qu'expliqué dans le Toy Example
-Continuer le nettoyage et l'uniformisation du fichier graphics
-Algorithme pour le choix optimal de Lambda de façon à ce que log-pi ne soit pas trop plate mais aussi que l'on ait un x_true pas trop linéaire dans la visualisation du premier graphe ?
+Continuer le nettoyage et l'uniformisation du fichier graphics (OK?)
+Fixer x_true pour avoir la bonne forme de chapeau (T=30) puis trouver le lambda qui convient (comme expliqué dans le mail)
 Faire tourner Source et Image pour Lambda grand et regarder le critère de distance sur les theta si on obtient des plots satisfaisants (descente puis oscillation)
 Implémenter le critère de qualité distance de la moyenne des theta par rapport à la moyenne théorique
 Implémenter le critère de qualité quantiles des theta par rapport aux quantiles théoriques
