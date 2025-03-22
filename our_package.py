@@ -254,29 +254,28 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
-                    
+                
+        theta_tab[i+1,:]=theta
+        L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
+        theta_tilde_tab[i+1,:]=D@theta    
+        
         # burn-in
         if ((i+1) % 1000) == 0:
             accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
             if burn_in:
-                gamma += (accept_rate - accept_final) * gamma
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 1e-4 * niter
-                gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
-                   
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
-            acceptance_cnt = 0
-        
-        theta_tab[i+1,:]=theta
-        L1_tab[i+1], L2_tab[i+1] = LogDistributionPi_Full(theta, Y, A, D, sh, Lambda)
-        theta_tilde_tab[i+1,:]=D@theta
+                    break
 
     if end_burn_in is None:
         raise ValueError("More iterations required")
@@ -384,29 +383,28 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
-                    
+                
+        theta_tab[i+1,:]=theta
+        theta_tilde_tab[i+1,:]=D@theta    
+        
         # burn-in
         if ((i+1) % 1000) == 0:
             accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
             if burn_in:
-                gamma += (accept_rate - accept_final) * gamma
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 1e-4 * niter
-                gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
-                   
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
-            acceptance_cnt = 0
-        
-        theta_tab[i+1,:]=theta
-        theta_tilde_tab[i+1,:]=D@theta
-
+                    break
+                
     if(wait_conv):
         end_burn_in=int(niter/2)
     
@@ -539,26 +537,25 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
-                    
+                
         # burn-in
         if ((i+1) % 1000) == 0:
             accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
+            
             if burn_in:
-                gamma += (accept_rate - accept_final) * gamma
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 1e-4 * niter
-                gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
-                   
-           
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
-            acceptance_cnt = 0
+                    break
 
     if(wait_conv):
         end_burn_in=int(niter/2)
@@ -636,15 +633,23 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta_tilde = candidate
                 accept_cnt += 1
-
+                
+        theta_tilde_tab[i+1,:] = theta_tilde
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde_tab[i+1,:])
+        
         # burn in
         if ((i+1) % 1000) == 0:
             #print("log_alpha : ", log_alpha)
             #print("taux d'accept", accept_cnt/1000)
             #print("mu :", mu)
+            accept_rate = acceptance_cnt / 1000
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
             if burn_in:
-                gamma += (accept_cnt / 1000 - accept_final) * gamma
-                burn_in = abs(accept_cnt / 1000 - accept_final) > 1e-2
+                gamma += (accept_rate - accept_final) * gamma
+                burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
@@ -652,14 +657,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
                 gamma += (accept_cnt / 1000 - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
-        
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_cnt/1000
-            cpt += 1
-            accept_cnt = 0
-
-        theta_tilde_tab[i+1,:] = theta_tilde
-        theta_tab[i+1,:] = npl.solve(D, theta_tilde_tab[i+1,:])
+                    break
         
     if(wait_conv):
         end_burn_in=int(niter/2)
