@@ -1,6 +1,6 @@
 TO DO:
 
-Implémenter le MH avec prox tel qu'expliqué dans le Toy Example
+Implémenter le MH avec prox tel qu'expliqué dans le Toy Example OK pour le prox image
 Continuer le nettoyage et l'uniformisation du fichier graphics (OK?)
 Fixer x_true pour avoir la bonne forme de chapeau (T=30) puis trouver le lambda qui convient (comme expliqué dans le mail)
 Faire tourner Source et Image pour Lambda grand et regarder le critère de distance sur les theta si on obtient des plots satisfaisants (descente puis oscillation)
