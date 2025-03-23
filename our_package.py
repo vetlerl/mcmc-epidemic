@@ -59,71 +59,51 @@ def Computation_Y_exp(T, Lambda,a,b):
     """
     return Y
 
-#Simulation of a n-sample of Y using a known deterministic x_true
+#Simulation of a n-sample of Y using a known deterministic x_true and return the associate best value for Lambda
 def Computation_Y_circ(T,a,b):
 
-    param_accept = 2/T
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T,a,b)
-
     x_true = np.zeros(T)
 
-    coeff_dir = 3 / (2*T/3 + 1)
-    ord_ori = coeff_dir - 1
+    coeff_dir = 3 / (int(2*T/3) + 2)
+    ord_ori = 2*coeff_dir - 1
     for i in range(int(2*T/3)):
         x_true[i] = coeff_dir * i + ord_ori
 
-    coeff_dir = (-2) / (T- int(2*T/3))
+    coeff_dir = (-2) / (T-1- int(2*T/3))
     for i in range(int(2*T/3), T):
         x_true[i] = coeff_dir * (i - int(2*T/3))
         
     Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Lambda=(- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
     
-    return Y
+    return Y,Lambda
 
-def Computation_Y_circ_debug(T, a,b):
+def Computation_Y_circ_debug(T,a,b):
 
-    param_accept = 2/T
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T,a,b)
-
     x_true = np.zeros(T)
 
-    coeff_dir = 3 / (2*T/3 + 1)
-    ord_ori = coeff_dir - 1
+    coeff_dir = 3 / (2*T/3 + 2)
+    ord_ori = 2*coeff_dir - 1
     for i in range(int(2*T/3)):
         x_true[i] = coeff_dir * i + ord_ori
 
-    coeff_dir = (-2) / (T- int(2*T/3))
+    coeff_dir = (-2) / (T-1- int(2*T/3))
     for i in range(int(2*T/3), T):
         x_true[i] = coeff_dir * (i - int(2*T/3)) + 2
 
     x_tilde_true = D@x_true
     Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Lambda=(- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
     
-    return Y, x_true, x_tilde_true
-
-def ComputeLambda(T, a, b):
-
-    D = BuildD(T)
-    sh = Buildsh(T,a,b)
-
-    x_true = np.zeros(T)
-
-    coeff_dir = 3 / (2*T/3 + 1)
-    ord_ori = coeff_dir - 1
-    for i in range(int(2*T/3)):
-        x_true[i] = coeff_dir * i + ord_ori
-
-    coeff_dir = (-2) / (T- int(2*T/3))
-    for i in range(int(2*T/3), T):
-        x_true[i] = coeff_dir * (i - int(2*T/3)) + 2
-
-    return (- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
+    return Y, x_true, x_tilde_true,Lambda
     
 def Computation_Y_simu_debug(T, Lambda, a, b):
 
