@@ -60,6 +60,8 @@ def Computation_Y_exp(T, Lambda,a,b):
     return Y
 
 #Simulation of a n-sample of Y using a known deterministic x_true and return the associate best value for Lambda
+
+"""
 def Computation_Y_circ(T,a,b):
 
     D = BuildD(T)
@@ -81,17 +83,45 @@ def Computation_Y_circ(T,a,b):
     Lambda=(- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
     
     return Y,Lambda
-
-def Computation_Y_circ_debug(T,a,b):
+"""
+def Computation_Y_circ_det(T, pen = 0.99):
 
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
+    a = -1
+    coeff_dir = 3 / (int(2*T/3) + 2)
+    ord_ori = 2*coeff_dir - 1
+    b = coeff_dir * (-1) + ord_ori
+    
     sh = Buildsh(T,a,b)
     x_true = np.zeros(T)
 
+    for i in range(int(2*T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = (-2) / (T-1- int(2*T/3))
+    for i in range(int(2*T/3), T):
+        x_true[i] = coeff_dir * (i - int(2*T/3))
+        
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Lambda=(- np.log(pen) / npl.norm(D@x_true + sh, ord = 1))
+    
+    return Y,Lambda, a, b
+
+def Computation_Y_circ_det_debug(T, pen = 0.99):
+
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+
     coeff_dir = 3 / (2*T/3 + 2)
     ord_ori = 2*coeff_dir - 1
+    a = -1
+    b = coeff_dir * (-1) + ord_ori
+    sh = Buildsh(T,a,b)
+    x_true = np.zeros(T)
+
     for i in range(int(2*T/3)):
         x_true[i] = coeff_dir * i + ord_ori
 
@@ -101,7 +131,7 @@ def Computation_Y_circ_debug(T,a,b):
 
     x_tilde_true = D@x_true
     Y = npr.multivariate_normal(A @ x_true, np.identity(T))
-    Lambda=(- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
+    Lambda=(- np.log(pen) / npl.norm(D@x_true + sh, ord = 1))
     
     return Y, x_true, x_tilde_true,Lambda
     
@@ -688,11 +718,11 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
             #print("log_alpha : ", log_alpha)
             #print("taux d'accept", accept_cnt/1000)
             #print("mu :", mu)
-            accept_rate = acceptance_cnt / 1000
+            accept_rate = accept_cnt / 1000
             gammas[cpt] = gamma
             accepts[cpt] = accept_rate
             cpt += 1
-            acceptance_cnt = 0
+            accept_cnt = 0
             if burn_in:
                 gamma += (accept_rate - accept_final) * gamma
                 burn_in = abs(accept_rate - accept_final) > 1e-2
