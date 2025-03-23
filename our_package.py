@@ -33,8 +33,8 @@ def Buildsh(T,a,b):
     sh[1] = b/4
     return sh
 
-#Simulation of a n-sample of Y
-def Computation_Y(T, Lambda,a,b):
+#Simulation of a n-sample of Y with exponential distribution (first simulations)
+def Computation_Y_exp(T, Lambda,a,b):
 
     param_accept = 2/T
     D = BuildD(T)
@@ -58,8 +58,74 @@ def Computation_Y(T, Lambda,a,b):
     Y = npr.multivariate_normal(A@x_true, np.identity(T))
     """
     return Y
+
+#Simulation of a n-sample of Y using a known deterministic x_true
+def Computation_Y_circ(T,a,b):
+
+    param_accept = 2/T
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T,a,b)
+
+    x_true = np.zeros(T)
+
+    coeff_dir = 3 / (2*T/3 + 1)
+    ord_ori = coeff_dir - 1
+    for i in range(int(2*T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = (-2) / (T- int(2*T/3))
+    for i in range(int(2*T/3), T):
+        x_true[i] = coeff_dir * (i - int(2*T/3))
+        
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
     
-def Computation_Y_debug(T, Lambda, a, b):
+    return Y
+
+def Computation_Y_circ_debug(T, a,b):
+
+    param_accept = 2/T
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T,a,b)
+
+    x_true = np.zeros(T)
+
+    coeff_dir = 3 / (2*T/3 + 1)
+    ord_ori = coeff_dir - 1
+    for i in range(int(2*T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = (-2) / (T- int(2*T/3))
+    for i in range(int(2*T/3), T):
+        x_true[i] = coeff_dir * (i - int(2*T/3)) + 2
+
+    x_tilde_true = D@x_true
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    
+    return Y, x_true, x_tilde_true
+
+def ComputeLambda(T, a, b):
+
+    D = BuildD(T)
+    sh = Buildsh(T,a,b)
+
+    x_true = np.zeros(T)
+
+    coeff_dir = 3 / (2*T/3 + 1)
+    ord_ori = coeff_dir - 1
+    for i in range(int(2*T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = (-2) / (T- int(2*T/3))
+    for i in range(int(2*T/3), T):
+        x_true[i] = coeff_dir * (i - int(2*T/3)) + 2
+
+    return (- np.log(0.99) / npl.norm(D@x_true + sh, ord = 1))
+    
+def Computation_Y_simu_debug(T, Lambda, a, b):
 
     param_accept = 2/T
     D = BuildD(T)
