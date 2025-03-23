@@ -665,14 +665,15 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta_tilde = np.ones(T) # maybe choose another starting point
+    theta = np.ones(T) # maybe choose another starting point
     #theta_tilde_tab = []
     end_burn_in = False
     theta_tilde_mean = np.zeros(T)
 
     theta_tab = np.empty((int(niter+1), T))
-    theta_tab[0,:]=npl.solve(D, theta_tilde)
+    theta_tab[0,:]=theta
     theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde = D@theta
     theta_tilde_tab[0,:]=theta_tilde
     
     accept_final = 0.24
@@ -700,7 +701,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         # print(f"mu={mu}")
         candidate = npr.multivariate_normal(mu, C)
 
-        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +1/2*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +(1/2)*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
 
         if log_alpha >=0 :
             theta_tilde = candidate
@@ -716,11 +717,14 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         # burn in
         if ((i+1) % 1000) == 0:
             #print("log_alpha : ", log_alpha)
-            #print("taux d'accept", accept_cnt/1000)
+            #print("gamma : ", gamma)
+            print("taux d'accept", accept_cnt/1000)
+            print("gamma", gamma)
             #print("mu :", mu)
             accept_rate = accept_cnt / 1000
             gammas[cpt] = gamma
             accepts[cpt] = accept_rate
+            #print(accept_rate)
             cpt += 1
             accept_cnt = 0
             if burn_in:
