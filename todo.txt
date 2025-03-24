@@ -1,10 +1,18 @@
 TO DO:
 
-Implémenter le MH avec prox tel qu'expliqué dans le Toy Example OK pour le prox image
+Implémenter le MH avec prox tel qu'expliqué dans le Toy Example OK pour le prox image DONE?
 Continuer le nettoyage et l'uniformisation du fichier graphics (OK?)
-Fixer x_true pour avoir la bonne forme de chapeau (T=30) puis trouver le lambda qui convient (comme expliqué dans le mail)
-Faire tourner Source et Image pour Lambda grand et regarder le critère de distance sur les theta si on obtient des plots satisfaisants (descente puis oscillation)
-Implémenter le critère de qualité distance de la moyenne des theta par rapport à la moyenne théorique
-Implémenter le critère de qualité quantiles des theta par rapport aux quantiles théoriques
+Fixer x_true pour avoir la bonne forme de chapeau (T=30) puis trouver le lambda qui convient (comme expliqué dans le mail) DONE
+Faire tourner Source et Image pour Lambda grand et regarder le critère de distance sur les theta si on obtient des plots satisfaisants (descente puis oscillation) DONE
+Implémenter le critère de qualité distance de la moyenne des theta par rapport à la moyenne théorique 
+Implémenter le critère de qualité quantiles des theta par rapport aux quantiles théoriques DONE
 Essayer de robustifier le code par rapport aux divisions par zéro pour avoir un fonctionnement même pour lambda > 10
 Prendre connaissance des docs et mails envoyés par Mme Fort au sujet du prior [DONE] de mon côté
+
+Résultats à montrer :
+Comportements des chaînes pour différentes valeurs de lambda, a et b (voir doc libreoffice)
+Comportement du prox (quantiles resserrés + alternance entre taux d'acceptation très hauts et très faibles)
+Comparaison des quantiles et des indices pour les différentes méthodes (méthodes image plus efficaces)
+
+Problèmes à régler :
+Quantiles resserrés du prox et alternance du taux d'acceptation : déjà essayé : gamma de départ plus grand, plus petit, plus d'itérations, multiplication par un facteur gamma/3, nouveau point de départ... Rien n'a changé ce comportement. Propriété du prox? Problème dans le code?
