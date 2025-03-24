@@ -734,7 +734,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
-                gamma += (accept_cnt / 1000 - accept_final) * gamma
+                gamma += (accept_rate - accept_final) * gamma
                 if not(wait_conv):
                     end_burn_in=i
                     break
