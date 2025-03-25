@@ -381,9 +381,9 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
         
     return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean, L1_tab, L2_tab,end_burn_in
 
-def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
+def MetropolisHastingsVisu(T, Lambda, Y, a,b,niter=1e5,method="source"):
 
-    plt.figure(1)
+    plt.figure()
     x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
     
     # Check the method
@@ -398,6 +398,148 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
     theta = np.zeros(T)#10*np.ones(T) # maybe choose another starting point
+    end_burn_in=None
+
+    # Covariance matrix C
+    if is_image:
+        D_1 = npl.solve(D, np.identity(T))
+        C = D_1@D_1.T
+    elif is_source:
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+
+    # Mean vector mu
+    if is_subdiff:
+        MeanProposal = CalculSubdiff  #(self, theta, gamma)
+    else:
+        MeanProposal = ReturnTheta
+
+    # Proposal ratio log_alpha
+    if not(is_subdiff):
+        LogRatio = LogAlpha_NotSubdiff  #(self, candidate, theta, mu, gamma)
+    else:
+        LogRatio = LogAlpha_IsSubdiff
+
+    """
+    acceptance_cnt = 0
+    sum_theta = theta
+    """
+
+    # Burn-in aux variables
+    burn_in = True
+    wait_conv = False
+    acceptance_cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde_tab[0,:]=D@theta
+    
+    theta_mean = np.zeros(T)
+    cnt = 0
+    converge=0
+
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int(niter/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int(niter/1000))
+    accepts[cpt] = 0
+
+    # Ajout de la courbe interactive
+    plt.plot(x, "b", label="Argmax")  # Ajout de la vraie valeur pour comparaison
+    plt.ylim(np.min(x)*1.5, np.max(x)*1.5)  # Ajuste les bornes selon tes données
+    plt.title("Évolution de Theta dans Metropolis-Hastings")
+    plt.xlabel("Dimension")
+    plt.ylabel("Valeur de Theta")
+    plt.legend()
+    plt.grid()
+    
+    # burn-in loop
+    for i in range(int(niter/2)):
+
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+            
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+                
+        theta_tab[i+1,:]=theta
+        theta_tilde_tab[i+1,:]=D@theta    
+        
+        # burn-in
+        if ((i+1) % 1000) == 0:
+            plt.plot(theta, "r", alpha=i/niter)  # Tracé en rouge avec transparence progressive
+            accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
+            if burn_in:
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 1e-4 * niter
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    
+    if(wait_conv):
+        end_burn_in=int(niter/2)
+    
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(end_burn_in,int(niter)):
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+            
+        theta_mean += theta
+        cnt += 1
+        theta_tab[i+1,:] = theta
+        theta_tilde_tab[i+1,:] = D @ theta
+
+        if((i+1)%1000 == 0):
+            plt.plot(theta, "r", alpha=i/niter)  # Tracé en rouge avec transparence progressive
+            plt.draw()
+    theta_mean /= cnt
+    plt.show()
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean,end_burn_in
+
+def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
+
+
+    x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
+    
+    # Check the method
+    is_source = method in ["source", "subdiff_source"]
+    is_image = method in ["image", "subdiff_image"]
+    is_subdiff = "subdiff" in method
+    
+    D = BuildD(T)
+    gamma = 0.001
+    accept_final = 0.24
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = np.zeros(T) # maybe choose another starting point
     end_burn_in=None
 
     # Covariance matrix C
@@ -469,7 +611,6 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         
         # burn-in
         if ((i+1) % 1000) == 0:
-            plt.plot(theta, "r", alpha = i/niter)
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
             gammas[cpt] = gamma
@@ -506,12 +647,6 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         cnt += 1
         theta_tab[i+1,:] = theta
         theta_tilde_tab[i+1,:] = D @ theta
-
-        if((i+1)%1000 == 0):
-            plt.plot(theta, "r", alpha = i/niter)
-
-    plt.plot(x, "b")
-    plt.grid(1)
 
     theta_mean /= cnt
         
