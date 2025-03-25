@@ -10,6 +10,7 @@ from scipy.sparse import diags
 import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
+import matplotlib.pyplot as plt
 
 #D
 def BuildD(T):
@@ -382,6 +383,9 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
 
 def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
 
+    plt.figure(1)
+    x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
+    
     # Check the method
     is_source = method in ["source", "subdiff_source"]
     is_image = method in ["image", "subdiff_image"]
@@ -465,6 +469,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         
         # burn-in
         if ((i+1) % 1000) == 0:
+            plt.plot(theta, "r", alpha = i/niter)
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
             gammas[cpt] = gamma
@@ -480,7 +485,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
                 if not(wait_conv):
                     end_burn_in=i
                     break
-                
+    
     if(wait_conv):
         end_burn_in=int(niter/2)
     
@@ -501,6 +506,12 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         cnt += 1
         theta_tab[i+1,:] = theta
         theta_tilde_tab[i+1,:] = D @ theta
+
+        if((i+1)%1000 == 0):
+            plt.plot(theta, "r", alpha = i/niter)
+
+    plt.plot(x, "b")
+    plt.grid(1)
 
     theta_mean /= cnt
         
