@@ -693,7 +693,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     accepts = np.empty(int(niter/2))
     accepts[cpt] = 0
 
-    C = 2*gamma*np.identity(T)
+    C = gamma*np.identity(T)
 
     for i in range(int(niter/2)):
         
@@ -729,12 +729,14 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
             accept_cnt = 0
             if burn_in:
                 gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
                 if not(wait_conv):
                     end_burn_in=i
                     break

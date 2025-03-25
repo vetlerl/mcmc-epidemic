@@ -15,4 +15,4 @@ Comportement du prox (quantiles resserrés + alternance entre taux d'acceptation
 Comparaison des quantiles et des indices pour les différentes méthodes (méthodes image plus efficaces)
 
 Problèmes à régler :
-Quantiles resserrés du prox et alternance du taux d'acceptation : déjà essayé : gamma de départ plus grand, plus petit, plus d'itérations, multiplication par un facteur gamma/3, nouveau point de départ... Rien n'a changé ce comportement. Propriété du prox? Problème dans le code?
+Quantiles resserrés du prox et alternance du taux d'acceptation : déjà essayé : gamma de départ plus grand, plus petit, plus d'itérations, actualisation du gamma plus fréquente, multiplication par un facteur gamma/3, nouveau point de départ... Rien n'a changé ce comportement. Propriété du prox? Problème dans le code?
