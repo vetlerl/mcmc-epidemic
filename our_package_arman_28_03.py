@@ -842,7 +842,6 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
     theta = 100*np.ones(T) 
-    end_burn_in=None
     
     # Covariance matrix C
     if is_image:
@@ -876,23 +875,16 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     
     theta_tab = np.empty((int(niter+1), T))
     theta_tab[0,:]=theta
-    theta_tilde_tab = np.empty((int(niter+1), T))
-    theta_tilde_tab[0,:]=D@theta
-    
-    theta_mean = np.zeros(T)
-    cnt = 0
-    converge=0
-
     # for plotting
 
     cpt = 0
-    gammas = np.empty(25)
+    gammas = np.empty(int(0.25*niter/1000))
     gammas[cpt] = gamma
-    accepts = np.empty(25)
+    accepts = np.empty(int(0.25*niter/1000))
     accepts[cpt] = 0
 
     # burn-in loop
-    for i in range(250000):
+    for i in range(int(0.25*niter)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
@@ -906,12 +898,11 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
                 theta = candidate
                 acceptance_cnt += 1
                 
-        theta_tab[i+1,:]=theta
-        theta_tilde_tab[i+1,:]=D@theta    
+        theta_tab[i+1,:]=theta  
         
         # burn-in
-        if ((i+1) % 10000) == 0:
-            accept_rate = acceptance_cnt / 10000
+        if ((i+1) % 1000) == 0:
+            accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
             gammas[cpt] = gamma
             accepts[cpt] = accept_rate
@@ -921,23 +912,94 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     print("End of the burn-in")
 
     ## convergence loop
-    for i in range(250000,int(niter)):
+    for i in range(int(0.25*niter),int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
         if log_alpha >=0 :
             theta = candidate
-            acceptance_cnt += 1
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
-                acceptance_cnt += 1
             
-        theta_mean += theta
-        cnt += 1
         theta_tab[i+1,:] = theta
-        theta_tilde_tab[i+1,:] = D @ theta
-
-    theta_mean /= cnt
         
-    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean
+    return theta_tab, accepts, gammas
+
+def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
+    
+    D = BuildD(T)
+    gamma = 0.01
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = 100*np.ones(T) # maybe choose another starting point
+
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int((niter/4)/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int((niter/4)/1000))
+    accepts[cpt] = 0
+
+    C = gamma*np.identity(T)
+
+    for i in range(int(niter/4)):
+
+        theta_tilde = D@theta
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        candidate = npr.multivariate_normal(mu, C)
+
+        log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+
+        if log_alpha >=0 :
+            theta_tilde = candidate
+            accept_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+                accept_cnt += 1
+                
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde)
+        theta = theta_tab[i+1,:]
+        
+        # burn in
+        if ((i+1) % 1000) == 0:
+            accept_rate = accept_cnt / 1000
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            accept_cnt = 0
+            gamma += (accept_rate - accept_final) * gamma
+            C = gamma*np.identity(T)
+        
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(int(niter/4),int(niter)):
+
+        theta_tilde = D@theta
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        
+        if log_alpha >=0 :
+            theta_tilde = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde)
+        theta = theta_tab[i+1,:]
+        
+    return theta_tab, accepts, gammas
