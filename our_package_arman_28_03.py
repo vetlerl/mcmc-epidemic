@@ -110,6 +110,31 @@ def Computation_Y_circ_det(T, pen = 0.99):
     
     return Y,Lambda, a, b
 
+def Computation_Y_circ_test(T, a, b):
+
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    coeff_dir = 2.7/T
+    ord_ori = 0.1
+    
+    sh = Buildsh(T,a,b)
+    x_true = np.zeros(T)
+
+    for i in range(int(T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = -3/T
+    ord_ori = 2
+    
+    for i in range(int(T/3), T):
+        x_true[i] = coeff_dir * (i - int(T/3)) + 2
+
+    x_true = 10*x_true
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    
+    return Y
+
 def Computation_Y_circ_det_debug(T, pen = 0.99):
 
     D = BuildD(T)
@@ -803,3 +828,116 @@ def DriftImage(theta_tilde, gamma, Lambda, U, Y, sh):
     tau = theta_tilde - gamma*nabla_f + sh
     return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*np.ones(N), np.zeros(N))
 
+def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
+
+    # Check the method
+    is_source = method in ["source", "subdiff_source"]
+    is_image = method in ["image", "subdiff_image"]
+    is_subdiff = "subdiff" in method
+    
+    D = BuildD(T)
+    gamma = 0.01
+    accept_final = 0.24
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = 100*np.ones(T) 
+    end_burn_in=None
+    
+    # Covariance matrix C
+    if is_image:
+        D_1 = npl.solve(D, np.identity(T))
+        C = D_1@D_1.T
+    elif is_source:
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+
+    # Mean vector mu
+    if is_subdiff:
+        MeanProposal = CalculSubdiff  #(self, theta, gamma)
+    else:
+        MeanProposal = ReturnTheta
+
+    # Proposal ratio log_alpha
+    if not(is_subdiff):
+        LogRatio = LogAlpha_NotSubdiff  #(self, candidate, theta, mu, gamma)
+    else:
+        LogRatio = LogAlpha_IsSubdiff
+
+    """
+    acceptance_cnt = 0
+    sum_theta = theta
+    """
+
+    # Burn-in aux variables
+    acceptance_cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde_tab[0,:]=D@theta
+    
+    theta_mean = np.zeros(T)
+    cnt = 0
+    converge=0
+
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(25)
+    gammas[cpt] = gamma
+    accepts = np.empty(25)
+    accepts[cpt] = 0
+
+    # burn-in loop
+    for i in range(250000):
+
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+            
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+                
+        theta_tab[i+1,:]=theta
+        theta_tilde_tab[i+1,:]=D@theta    
+        
+        # burn-in
+        if ((i+1) % 10000) == 0:
+            accept_rate = acceptance_cnt / 10000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
+
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(250000,int(niter)):
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+            
+        theta_mean += theta
+        cnt += 1
+        theta_tab[i+1,:] = theta
+        theta_tilde_tab[i+1,:] = D @ theta
+
+    theta_mean /= cnt
+        
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean
