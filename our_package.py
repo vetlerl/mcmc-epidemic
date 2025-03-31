@@ -731,10 +731,12 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
                 gamma += (accept_rate - accept_final) * gamma
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
+                C = 2*gamma*np.identity(T)
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
+                C = 2*gamma*np.identity(T)
                 if not(wait_conv):
                     end_burn_in=i
                     break
@@ -768,7 +770,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
 
 def DriftSource(theta, gamma, Lambda, A, Y, D, sh):
     N = len(theta)
-    tau = gamma*A.T@Y + theta - gamma*Lambda*D.T@sub_diff(D@theta,sh) 
+    tau = gamma*A.T@Y + theta - gamma*Lambda*D.T@sub_diff(D@theta,sh)
     B = npl.solve(gamma*A.T@A.T+np.identity(N),np.identity(N))
     return B@tau
 
