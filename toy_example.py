@@ -10,6 +10,7 @@ from scipy.sparse import diags
 import numpy as np
 import numpy.linalg as npl
 import numpy.random as npr
+import matplotlib.pyplot as plt
 
 #D
 def BuildD(T):
@@ -109,6 +110,31 @@ def Computation_Y_circ_det(T, pen = 0.99):
     
     return Y,Lambda, a, b
 
+def Computation_Y_circ_test(T, a, b):
+
+    D = BuildD(T)
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    coeff_dir = 2.7/T
+    ord_ori = 0.1
+    
+    sh = Buildsh(T,a,b)
+    x_true = np.zeros(T)
+
+    for i in range(int(T/3)):
+        x_true[i] = coeff_dir * i + ord_ori
+
+    coeff_dir = -3/T
+    ord_ori = 2
+    
+    for i in range(int(T/3), T):
+        x_true[i] = coeff_dir * (i - int(T/3)) + 2
+
+    x_true = 10*x_true
+    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    
+    return Y
+
 def Computation_Y_circ_det_debug(T, pen = 0.99):
 
     D = BuildD(T)
@@ -190,7 +216,7 @@ def ComputeMeans(T, Lambda, Y, a, b): # without robustification here
     mu = npl.solve(D, mu_tilde)
     return mu, mu_tilde
 
-def ComputeQuantiles(T, Lambda, threshold, Y, a, b, niter=int(1e5)): # Fonction de répartition et non quantiles ici !
+def ComputeQuantiles(T, Lambda, threshold, Y, a, b, niter=int(1e6)): # Fonction de répartition et non quantiles ici !
     
     D = BuildD(T)
     U, Delta, Vt = BuildUVDelta(D)
@@ -382,6 +408,9 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
 
 def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
 
+    plt.figure()
+    x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
+    
     # Check the method
     is_source = method in ["source", "subdiff_source"]
     is_image = method in ["image", "subdiff_image"]
@@ -393,7 +422,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta = np.zeros(T)#10*np.ones(T) # maybe choose another starting point
+    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) # maybe choose another starting point
     end_burn_in=None
 
     # Covariance matrix C
@@ -465,6 +494,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         
         # burn-in
         if ((i+1) % 1000) == 0:
+            plt.plot(theta, "r", alpha = i/niter)
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
             gammas[cpt] = gamma
@@ -480,7 +510,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
                 if not(wait_conv):
                     end_burn_in=i
                     break
-                
+    
     if(wait_conv):
         end_burn_in=int(niter/2)
     
@@ -501,6 +531,13 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
         cnt += 1
         theta_tab[i+1,:] = theta
         theta_tilde_tab[i+1,:] = D @ theta
+
+        if((i+1)%1000 == 0):
+            plt.plot(theta, "r", alpha = i/niter)
+
+    plt.plot(x, "b")
+    plt.ylim(np.min(x), np.max(x))
+    plt.show()
 
     theta_mean /= cnt
         
@@ -659,13 +696,16 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
     return theta,theta_tilde
 
 def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
+
+    plt.figure()
+    x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
     
     D = BuildD(T)
     gamma = 0.001
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    theta = np.ones(T) # maybe choose another starting point
+    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) # maybe choose another starting point
     #theta_tilde_tab = []
     end_burn_in = False
     theta_tilde_mean = np.zeros(T)
@@ -693,7 +733,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     accepts = np.empty(int(niter/2))
     accepts[cpt] = 0
 
-    C = 2*gamma*np.identity(T)
+    C = gamma*np.identity(T)
 
     for i in range(int(niter/2)):
         
@@ -701,7 +741,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         # print(f"mu={mu}")
         candidate = npr.multivariate_normal(mu, C)
 
-        log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +(1/2)*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
 
         if log_alpha >=0 :
             theta_tilde = candidate
@@ -716,6 +756,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         
         # burn in
         if ((i+1) % 1000) == 0:
+            plt.plot(npl.solve(D,theta_tilde), "r", alpha = i/niter)
             #print("log_alpha : ", log_alpha)
             #print("gamma : ", gamma)
             print("taux d'accept", accept_cnt/1000)
@@ -729,6 +770,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
             accept_cnt = 0
             if burn_in:
                 gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
                 C = 2*gamma*np.identity(T)
@@ -736,7 +778,11 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
+<<<<<<< HEAD:our_package.py
                 C = 2*gamma*np.identity(T)
+=======
+                C = gamma*np.identity(T)
+>>>>>>> 89caba38dd2ed8b2b1d7a970285d3c23d6d8e42e:toy_example.py
                 if not(wait_conv):
                     end_burn_in=i
                     break
@@ -750,7 +796,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
         candidate = npr.multivariate_normal(mu, C)
         
-        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2 - Lambda*npl.norm(candidate + sh, ord=1)) +1/2*(npl.norm(U@Y - theta_tilde)**2 - Lambda*npl.norm(theta_tilde + sh,ord=1)) -1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
         
         if log_alpha >=0 :
             theta_tilde = candidate
@@ -760,9 +806,16 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
 
         theta_tilde_tab[i+1,:] = theta_tilde
         theta_tab[i+1,:] = npl.solve(D, theta_tilde_tab[i+1,:])
+
+        if((i+1)%1000 == 0):
+            plt.plot(npl.solve(D,theta_tilde), "r", alpha = i/niter)
             
         theta_tilde_mean += theta_tilde
         cnt += 1
+
+    plt.plot(x, "b")
+    plt.ylim(np.min(x), np.max(x))
+    plt.show()
     
     theta_tilde_mean /= cnt
         
@@ -780,3 +833,178 @@ def DriftImage(theta_tilde, gamma, Lambda, U, Y, sh):
     tau = theta_tilde - gamma*nabla_f + sh
     return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*np.ones(N), np.zeros(N))
 
+def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
+
+    # Check the method
+    is_source = method in ["source", "subdiff_source"]
+    is_image = method in ["image", "subdiff_image"]
+    is_subdiff = "subdiff" in method
+    
+    D = BuildD(T)
+    gamma = 0.01
+    accept_final = 0.24
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = 100*np.ones(T) 
+    
+    # Covariance matrix C
+    if is_image:
+        D_1 = npl.solve(D, np.identity(T))
+        C = D_1@D_1.T
+    elif is_source:
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+
+    # Mean vector mu
+    if is_subdiff:
+        MeanProposal = CalculSubdiff  #(self, theta, gamma)
+    else:
+        MeanProposal = ReturnTheta
+
+    # Proposal ratio log_alpha
+    if not(is_subdiff):
+        LogRatio = LogAlpha_NotSubdiff  #(self, candidate, theta, mu, gamma)
+    else:
+        LogRatio = LogAlpha_IsSubdiff
+
+    """
+    acceptance_cnt = 0
+    sum_theta = theta
+    """
+
+    # Burn-in aux variables
+    acceptance_cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int(0.25*niter/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int(0.25*niter/1000))
+    accepts[cpt] = 0
+
+    # burn-in loop
+    for i in range(int(0.25*niter)):
+
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+            
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+                
+        theta_tab[i+1,:]=theta  
+        
+        # burn-in
+        if ((i+1) % 1000) == 0:
+            accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
+
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(int(0.25*niter),int(niter)):
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+            
+        theta_tab[i+1,:] = theta
+        
+    return theta_tab, accepts, gammas
+
+def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
+    
+    D = BuildD(T)
+    gamma = 0.01
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = 100*np.ones(T) # maybe choose another starting point
+
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int((niter/4)/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int((niter/4)/1000))
+    accepts[cpt] = 0
+
+    C = gamma*np.identity(T)
+
+    for i in range(int(niter/4)):
+
+        theta_tilde = D@theta
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        candidate = npr.multivariate_normal(mu, C)
+
+        log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+
+        if log_alpha >=0 :
+            theta_tilde = candidate
+            accept_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+                accept_cnt += 1
+                
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde)
+        theta = theta_tab[i+1,:]
+        
+        # burn in
+        if ((i+1) % 1000) == 0:
+            accept_rate = accept_cnt / 1000
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            accept_cnt = 0
+            gamma += (accept_rate - accept_final) * gamma
+            C = gamma*np.identity(T)
+        
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(int(niter/4),int(niter)):
+
+        theta_tilde = D@theta
+        mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        
+        if log_alpha >=0 :
+            theta_tilde = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta_tilde = candidate
+
+        theta_tab[i+1,:] = npl.solve(D, theta_tilde)
+        theta = theta_tab[i+1,:]
+        
+    return theta_tab, accepts, gammas
