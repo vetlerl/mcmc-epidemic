@@ -778,11 +778,8 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
                 gamma += (accept_rate - accept_final) * gamma
-<<<<<<< HEAD:our_package.py
-                C = 2*gamma*np.identity(T)
-=======
+
                 C = gamma*np.identity(T)
->>>>>>> 89caba38dd2ed8b2b1d7a970285d3c23d6d8e42e:toy_example.py
                 if not(wait_conv):
                     end_burn_in=i
                     break
@@ -821,15 +818,24 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         
     return theta_tab, theta_tilde_tab, accepts, gammas, theta_tilde_mean,end_burn_in
 
-def DriftSource(theta, gamma, Lambda, A, Y, D, sh):
+""" #wrong I think
+def DriftSource_test(theta, gamma, Lambda, A, Y, D, sh):
     N = len(theta)
     tau = gamma*A.T@Y + theta - gamma*Lambda*D.T@sub_diff(D@theta,sh)
     B = npl.solve(gamma*A.T@A.T+np.identity(N),np.identity(N))
     return B@tau
+"""
 
+def DriftSource(theta, gamma, Lambda, A, Y, D, sh):
+    N = len(theta)
+    nabla_f = A.T@(A@theta - Y)
+    D_1 = npl.solve(D,np.identity(N)) #could fail
+    tau = theta - gamma*nabla_f + D_1@sh
+    return -D_1@sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*D.T@np.ones(N), np.zeros(N))
+    
 def DriftImage(theta_tilde, gamma, Lambda, U, Y, sh):
     N = len(theta_tilde)
-    nabla_f = -(U@Y-theta_tilde)#A.T@(A@theta_tilde - Y)
+    nabla_f = -(U@Y-theta_tilde)
     tau = theta_tilde - gamma*nabla_f + sh
     return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*np.ones(N), np.zeros(N))
 
@@ -934,6 +940,7 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
 def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
     
     D = BuildD(T)
+    D_1 = npl.solve(D, np.identity(T))
     gamma = 0.01
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
@@ -956,7 +963,7 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
     accepts = np.empty(int((niter/4)/1000))
     accepts[cpt] = 0
 
-    C = gamma*np.identity(T)
+    C = gamma*D_1@D_1.T
 
     for i in range(int(niter/4)):
 
@@ -985,7 +992,7 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
             cpt += 1
             accept_cnt = 0
             gamma += (accept_rate - accept_final) * gamma
-            C = gamma*np.identity(T)
+            C = gamma*D_1@D_1.T
         
     print("End of the burn-in")
 
@@ -996,7 +1003,7 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
         candidate = npr.multivariate_normal(mu, C)
         
-        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
+        log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(2*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(2*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
         
         if log_alpha >=0 :
             theta_tilde = candidate
@@ -1006,5 +1013,82 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
 
         theta_tab[i+1,:] = npl.solve(D, theta_tilde)
         theta = theta_tab[i+1,:]
+        
+    return theta_tab, accepts, gammas
+
+def MH_Prox_Source_test(T, Lambda, Y, a, b, niter=1e5):
+    
+    D = BuildD(T)
+    gamma = 0.01
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = 100*np.ones(T) # maybe choose another starting point
+
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int((niter/4)/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int((niter/4)/1000))
+    accepts[cpt] = 0
+
+    C = gamma*np.identity(T)
+
+    for i in range(int(niter/4)):
+
+        mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        mu_cand = DriftSource(candidate, gamma, Lambda, A, Y, D, sh)
+        log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
+        - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
+        
+        if log_alpha >=0 :
+            theta = candidate
+            accept_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                accept_cnt += 1
+                
+        theta_tab[i+1,:] = theta
+        
+        # burn in
+        if ((i+1) % 1000) == 0:
+            accept_rate = accept_cnt / 1000
+            print(f"PG S accepteance rate: {accept_rate:.2f}") 
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            accept_cnt = 0
+            gamma += (accept_rate - accept_final) * gamma
+            C = gamma*np.identity(T)
+        
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(int(niter/4),int(niter)):
+
+        mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        
+        log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
+        - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
+        
+        if log_alpha >=0 :
+            theta = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+
+        theta_tab[i+1,:] = theta
         
     return theta_tab, accepts, gammas
