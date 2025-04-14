@@ -412,9 +412,13 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
     
     # Check the method
-    is_source = method in ["source", "subdiff_source"]
-    is_image = method in ["image", "subdiff_image"]
+    source_methods = ["source", "subdiff_source", "prox_source"]
+    image_methods  = ["image", "subdiff_image", "prox_image"]
+    
+    is_source = method in source_methods
+    is_image = method in image_methods
     is_subdiff = "subdiff" in method
+    is_prox = "prox" in method
     
     D = BuildD(T)
     gamma = 0.001
@@ -432,11 +436,13 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     elif is_source:
         C = np.identity(T)
     else:
-        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+        raise Exception(f"provided method does not exist. please pick from: {source_methods} or {image_methods}")
 
     # Mean vector mu
     if is_subdiff:
         MeanProposal = CalculSubdiff  #(self, theta, gamma)
+    elif is_prox:
+        MeanProposal = Calcul
     else:
         MeanProposal = ReturnTheta
 
