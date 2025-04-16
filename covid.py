@@ -43,10 +43,10 @@ def PD3S(file_Z, file_phi, niter = 1e5):
         for row in csvReader:
             phi.append(float(row[0]))
 
-    a = Z[0] / phi[0]
-    b = Z[1] / phi[1]
-    Z = Z[2:]
-    phi = phi[2:]
+    a = 0.73597
+    b = 0.73227
+    #Z = Z[2:]
+    #phi = phi[2:]
 
     T = len(Z)
     c = np.array(phi) #?
@@ -88,5 +88,5 @@ def PD3S(file_Z, file_phi, niter = 1e5):
         M = M + theta
         theta_tab[k+1,:] = theta
         
-    return log_pi(theta_tab, phi, c, Z, lambda_R, D, sh, lambda_O, C)
+    return theta
 
