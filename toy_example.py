@@ -707,7 +707,6 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     sh = Buildsh(T, a, b)
     theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) # maybe choose another starting point
     #theta_tilde_tab = []
-    end_burn_in = False
     theta_tilde_mean = np.zeros(T)
 
     theta_tab = np.empty((int(niter+1), T))
@@ -738,7 +737,6 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     for i in range(int(niter/2)):
         
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
-        # print(f"mu={mu}")
         candidate = npr.multivariate_normal(mu, C)
 
         log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
@@ -757,15 +755,9 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         # burn in
         if ((i+1) % 1000) == 0:
             plt.plot(npl.solve(D,theta_tilde), "r", alpha = i/niter)
-            #print("log_alpha : ", log_alpha)
-            #print("gamma : ", gamma)
-            print("taux d'accept", accept_cnt/1000)
-            print("gamma", gamma)
-            #print("mu :", mu)
             accept_rate = accept_cnt / 1000
             gammas[cpt] = gamma
             accepts[cpt] = accept_rate
-            #print(accept_rate)
             cpt += 1
             accept_cnt = 0
             if burn_in:
@@ -773,7 +765,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
                 C = gamma*np.identity(T)
                 burn_in = abs(accept_rate - accept_final) > 1e-2
                 wait_conv = not burn_in
-                C = 2*gamma*np.identity(T)
+                C = gamma*np.identity(T)
             elif wait_conv:
                 converge += 1
                 wait_conv = converge < 2e-4 * niter
@@ -817,6 +809,111 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     theta_tilde_mean /= cnt
         
     return theta_tab, theta_tilde_tab, accepts, gammas, theta_tilde_mean,end_burn_in
+
+def MH_Prox_Source(T, Lambda, Y, a, b, niter=1e5):
+    
+    D = BuildD(T)
+    gamma = 0.01
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) # maybe choose another starting point
+    theta_tilde_mean = np.zeros(T)
+
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde = D@theta
+    theta_tilde_tab[0,:]=theta_tilde
+    
+    accept_final = 0.24
+    accept_cnt = 0
+    cnt = 0
+    end_burn_in = 0
+    burn_in = True
+    wait_conv=False
+    converge = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int((niter/2)/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int((niter/2)/1000))
+    accepts[cpt] = 0
+
+    C = gamma*np.identity(T)
+
+    for i in range(int(niter/2)):
+
+        mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        mu_cand = DriftSource(candidate, gamma, Lambda, A, Y, D, sh)
+        log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
+        - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
+        
+        if log_alpha >=0 :
+            theta = candidate
+            accept_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                accept_cnt += 1
+                
+        theta_tab[i+1,:] = theta
+        theta_tilde_tab[i+1,:] = D@theta
+        
+        # burn in
+        if ((i+1) % 1000) == 0:
+            accept_rate = accept_cnt / 1000
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            accept_cnt = 0
+            gamma += (accept_rate - accept_final) * gamma
+            C = gamma*np.identity(T)
+            if burn_in:
+                gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+                C = gamma*np.identity(T)
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    if(wait_conv):
+        end_burn_in=int(niter/2)
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(end_burn_in,int(niter)):
+
+        mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
+        candidate = npr.multivariate_normal(mu, C)
+        
+        log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
+        - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
+        
+        if log_alpha >=0 :
+            theta = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+
+        theta_tab[i+1,:] = theta
+        theta_tilde_tab[i+1,:] = D@theta
+        theta_tilde_mean += theta_tilde
+        cnt += 1
+        
+    theta_tilde_mean /= cnt
+    return theta_tab, theta_tilde_tab, accepts, gammas, theta_tilde_mean,end_burn_in
+
 
 """ #wrong I think
 def DriftSource_test(theta, gamma, Lambda, A, Y, D, sh):
@@ -883,19 +980,22 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     # Burn-in aux variables
     acceptance_cnt = 0
     rd = npr.uniform(0, 1, int(niter+1))
+    end_burn_in=0
+    burn_in=True
+    wait_conv=False
+    converge=0
     
     theta_tab = np.empty((int(niter+1), T))
     theta_tab[0,:]=theta
     # for plotting
 
-    cpt = 0
-    gammas = np.empty(int(0.25*niter/1000))
-    gammas[cpt] = gamma
-    accepts = np.empty(int(0.25*niter/1000))
-    accepts[cpt] = 0
-
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
+    
     # burn-in loop
-    for i in range(int(0.25*niter)):
+    for i in range(int(0.5*niter)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
@@ -915,15 +1015,26 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
         if ((i+1) % 1000) == 0:
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             acceptance_cnt = 0
-
+            if burn_in:
+                gamma += (accept_rate - accept_final) * gamma
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_rate - accept_final) * gamma
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    if(wait_conv):
+        end_burn_in=int(niter/2)
     print("End of the burn-in")
 
     ## convergence loop
-    for i in range(int(0.25*niter),int(niter)):
+    for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
         candidate = npr.multivariate_normal(mu, gamma*C)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
@@ -954,18 +1065,20 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
     accept_cnt = 0
     cnt = 0
     rd = npr.uniform(0, 1, int(niter+1))
-    
+    burn_in=True
+    wait_conv=False
+    converge=0
     # for plotting
 
     cpt = 0
-    gammas = np.empty(int((niter/4)/1000))
-    gammas[cpt] = gamma
-    accepts = np.empty(int((niter/4)/1000))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     C = gamma*D_1@D_1.T
 
-    for i in range(int(niter/4)):
+    for i in range(int(niter/2)):
 
         theta_tilde = D@theta
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
@@ -987,17 +1100,31 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
         # burn in
         if ((i+1) % 1000) == 0:
             accept_rate = accept_cnt / 1000
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             accept_cnt = 0
             gamma += (accept_rate - accept_final) * gamma
             C = gamma*D_1@D_1.T
-        
+            if burn_in:
+                gamma += (accept_rate - accept_final) * gamma
+                C = gamma*D_1@D_1.T
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_rate - accept_final) * gamma
+
+                C = gamma*D_1@D_1.T
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    if(wait_conv):
+        end_burn_in=int(niter/2)
     print("End of the burn-in")
 
     ## convergence loop
-    for i in range(int(niter/4),int(niter)):
+    for i in range(end_burn_in,int(niter)):
 
         theta_tilde = D@theta
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
@@ -1032,18 +1159,19 @@ def MH_Prox_Source_test(T, Lambda, Y, a, b, niter=1e5):
     accept_cnt = 0
     cnt = 0
     rd = npr.uniform(0, 1, int(niter+1))
-    
+    burn_in=True
+    wait_conv=False
+    converge=0
     # for plotting
 
-    cpt = 0
-    gammas = np.empty(int((niter/4)/1000))
-    gammas[cpt] = gamma
-    accepts = np.empty(int((niter/4)/1000))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     C = gamma*np.identity(T)
 
-    for i in range(int(niter/4)):
+    for i in range(int(niter/2)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
         candidate = npr.multivariate_normal(mu, C)
@@ -1064,18 +1192,31 @@ def MH_Prox_Source_test(T, Lambda, Y, a, b, niter=1e5):
         # burn in
         if ((i+1) % 1000) == 0:
             accept_rate = accept_cnt / 1000
-            print(f"PG S accepteance rate: {accept_rate:.2f}") 
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             accept_cnt = 0
             gamma += (accept_rate - accept_final) * gamma
             C = gamma*np.identity(T)
-        
+            if burn_in:
+                gamma += (accept_rate - accept_final) * gamma
+                C = gamma*np.identity(T)
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                gamma += (accept_rate - accept_final) * gamma
+
+                C =gamma*np.identity(T)
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    if(wait_conv):
+        end_burn_in=int(niter/2)
     print("End of the burn-in")
 
     ## convergence loop
-    for i in range(int(niter/4),int(niter)):
+    for i in range(end_burn_in,int(niter)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
         candidate = npr.multivariate_normal(mu, C)

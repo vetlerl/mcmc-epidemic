@@ -90,3 +90,134 @@ def PD3S(file_Z, file_phi, niter = 1e5):
         
     return theta
 
+def MHRW(T, Lambda, Y, a,b,niter=1e5,method="source"):
+
+    plt.figure()
+    x,x_tilde = ComputeArgmax(T,Lambda, Y,a,b)
+    
+    D = BuildD(T)
+    gamma = 0.001
+    accept_final = 0.24
+    U, Delta, Vt = BuildUVDelta(D)
+    A = BuildA(Delta, Vt)
+    sh = Buildsh(T, a, b)
+    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) # maybe choose another starting point
+    end_burn_in=None
+
+    # Covariance matrix C
+    if is_image:
+        D_1 = npl.solve(D, np.identity(T))
+        C = D_1@D_1.T
+    elif is_source:
+        C = np.identity(T)
+    else:
+        raise Exception("method must be either 'source' or 'image' (subdiff or not)")
+
+    # Mean vector mu
+    if is_subdiff:
+        MeanProposal = CalculSubdiff  #(self, theta, gamma)
+    else:
+        MeanProposal = ReturnTheta
+
+    # Proposal ratio log_alpha
+    if not(is_subdiff):
+        LogRatio = LogAlpha_NotSubdiff  #(self, candidate, theta, mu, gamma)
+    else:
+        LogRatio = LogAlpha_IsSubdiff
+
+    """
+    acceptance_cnt = 0
+    sum_theta = theta
+    """
+
+    # Burn-in aux variables
+    burn_in = True
+    wait_conv = False
+    acceptance_cnt = 0
+    rd = npr.uniform(0, 1, int(niter+1))
+    
+    theta_tab = np.empty((int(niter+1), T))
+    theta_tab[0,:]=theta
+    theta_tilde_tab = np.empty((int(niter+1), T))
+    theta_tilde_tab[0,:]=D@theta
+    
+    theta_mean = np.zeros(T)
+    cnt = 0
+    converge=0
+
+    # for plotting
+
+    cpt = 0
+    gammas = np.empty(int(niter/1000))
+    gammas[cpt] = gamma
+    accepts = np.empty(int(niter/1000))
+    accepts[cpt] = 0
+
+    # burn-in loop
+    for i in range(int(niter/2)):
+
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+            
+        if log_alpha >=0 :
+            theta = candidate
+            acceptance_cnt += 1
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+                acceptance_cnt += 1
+                
+        theta_tab[i+1,:]=theta
+        theta_tilde_tab[i+1,:]=D@theta    
+        
+        # burn-in
+        if ((i+1) % 1000) == 0:
+            plt.plot(theta, "r", alpha = i/niter)
+            accept_rate = acceptance_cnt / 1000
+            gamma += (accept_rate - accept_final) * gamma
+            gammas[cpt] = gamma
+            accepts[cpt] = accept_rate
+            cpt += 1
+            acceptance_cnt = 0
+            if burn_in:
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 1e-4 * niter
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
+    
+    if(wait_conv):
+        end_burn_in=int(niter/2)
+    
+    print("End of the burn-in")
+
+    ## convergence loop
+    for i in range(end_burn_in,int(niter)):
+        mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
+        candidate = npr.multivariate_normal(mu, gamma*C)
+        log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
+        if log_alpha >=0 :
+            theta = candidate
+        else:
+            if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                theta = candidate
+            
+        theta_mean += theta
+        cnt += 1
+        theta_tab[i+1,:] = theta
+        theta_tilde_tab[i+1,:] = D @ theta
+
+        if((i+1)%1000 == 0):
+            plt.plot(theta, "r", alpha = i/niter)
+
+    plt.plot(x, "b")
+    plt.ylim(np.min(x), np.max(x))
+    plt.show()
+
+    theta_mean /= cnt
+        
+    return theta_tab,theta_tilde_tab, accepts, gammas, theta_mean,end_burn_in
