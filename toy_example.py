@@ -468,11 +468,10 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
 
     # for plotting
 
-    cpt = 0
-    gammas = np.empty(int(niter/1000))
-    gammas[cpt] = gamma
-    accepts = np.empty(int(niter/1000))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     # burn-in loop
     for i in range(int(niter/2)):
@@ -497,9 +496,8 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
             plt.plot(theta, "r", alpha = i/niter)
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             acceptance_cnt = 0
             if burn_in:
                 burn_in = abs(accept_rate - accept_final) > 1e-2
@@ -630,11 +628,10 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
 
     # for plotting
 
-    cpt = 0
-    gammas = np.empty(int(niter/2))
-    gammas[cpt] = gamma
-    accepts = np.empty(int(niter/2))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     # burn-in loop
     for i in range(int(niter/2)):
@@ -655,9 +652,8 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
         if ((i+1) % 1000) == 0:
             accept_rate = acceptance_cnt / 1000
             gamma += (accept_rate - accept_final) * gamma
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             acceptance_cnt = 0
             
             if burn_in:
@@ -726,11 +722,10 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     
     # for plotting
 
-    cpt = 0
-    gammas = np.empty(int(niter/2))
-    gammas[cpt] = gamma
-    accepts = np.empty(int(niter/2))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     C = gamma*np.identity(T)
 
@@ -756,9 +751,8 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
         if ((i+1) % 1000) == 0:
             plt.plot(npl.solve(D,theta_tilde), "r", alpha = i/niter)
             accept_rate = accept_cnt / 1000
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             accept_cnt = 0
             if burn_in:
                 gamma += (accept_rate - accept_final) * gamma
@@ -838,10 +832,10 @@ def MH_Prox_Source(T, Lambda, Y, a, b, niter=1e5):
     # for plotting
 
     cpt = 0
-    gammas = np.empty(int((niter/2)/1000))
-    gammas[cpt] = gamma
-    accepts = np.empty(int((niter/2)/1000))
-    accepts[cpt] = 0
+    gammas = []
+    accepts = []
+    gammas.append(gamma)
+    accepts.append(0)
 
     C = gamma*np.identity(T)
 
@@ -867,9 +861,8 @@ def MH_Prox_Source(T, Lambda, Y, a, b, niter=1e5):
         # burn in
         if ((i+1) % 1000) == 0:
             accept_rate = accept_cnt / 1000
-            gammas[cpt] = gamma
-            accepts[cpt] = accept_rate
-            cpt += 1
+            gammas.append(gamma)
+            accepts.append(accept_rate)
             accept_cnt = 0
             gamma += (accept_rate - accept_final) * gamma
             C = gamma*np.identity(T)
