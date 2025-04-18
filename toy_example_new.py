@@ -213,6 +213,10 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     rd = npr.uniform(0, 1, int(niter+1))
 
     end_burn_in = None
+    converge=0
+    burn_in=True
+    wait_conv=False
+    
 
     gammas = []
     accepts = []
@@ -261,10 +265,15 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 accepts.append(accept_rate)
                 accept_cnt = 0 #reset
                 gamma += (accept_rate - accept_final) * gamma
-                
-                if abs(accept_rate - accept_final) <= 1e-2:
-                    end_burn_in = i
-                    break
+                if burn_in:
+                    burn_in = abs(accept_rate - accept_final) > 1e-2
+                    wait_conv = not burn_in
+                elif wait_conv:
+                    converge += 1
+                    wait_conv = converge < 2e-4 * niter
+                    if not(wait_conv):
+                        end_burn_in=i
+                        break
                 
         if end_burn_in is None:
             end_burn_in = int(niter/2)-1
@@ -340,11 +349,16 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 accepts.append(accept_rate)
                 accept_cnt = 0 #reset
                 gamma += (accept_rate - accept_final) * gamma
-                
-                if abs(accept_rate - accept_final) <= 1e-2:
-                    end_burn_in = i
-                    break
-                
+                if burn_in:
+                    burn_in = abs(accept_rate - accept_final) > 1e-2
+                    wait_conv = not burn_in
+                elif wait_conv:
+                    converge += 1
+                    wait_conv = converge < 2e-4 * niter
+                    if not(wait_conv):
+                        end_burn_in=i
+                        break
+                        
         if end_burn_in is None:
             end_burn_in = int(niter/2)-1
         print(f"ended burn-in @ {end_burn_in:d}: {accepts[-1]-accept_final:.3f}")
@@ -438,6 +452,15 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
                 tmp_burn_in = np.abs(accept_rate - accept_final) <= 1e-2
                 update_map = end_burn_in == 0
                 end_burn_in[update_map] = i * tmp_burn_in[update_map]
+                if burn_in:
+                    burn_in = abs(accept_rate - accept_final) > 1e-2
+                    wait_conv = not burn_in
+                elif wait_conv:
+                    converge += 1
+                    wait_conv = converge < 2e-4 * niter
+                    if not(wait_conv):
+                        end_burn_in=i
+                        break
                 
     #------------- Case: Image -------------#    
     else:
