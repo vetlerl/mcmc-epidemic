@@ -18,10 +18,9 @@ def log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c,C):
     
     shR, shO = np.split(barsh, 2)
     R, O = np.split(theta, 2) 
-    log_pi_val = -np.sum(R*phi + O - Z*np.log(R*phi + c*O + 1e-10)) - lambda_R*np.linalg.norm(D@R + shR, ord = 1) - lambda_O*np.linalg.norm(C@O+shO, ord = 1)
+    log_pi_val = -np.sum(R*phi + c*O - Z*np.log(R*phi + c*O + 1e-10)) - lambda_R*np.linalg.norm(D@R + shR, ord = 1) - lambda_O*np.linalg.norm(C@O+shO, ord = 1)
     
     return log_pi_val
-
 
 def load_data(file_Z,file_phi):
     Z = []
@@ -168,19 +167,19 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
                     end_burn_in=i
                     break
         if ((i+1) % 50000) == 0:
+            print(i+1)
             R,O=np.split(theta,2)
             ax1.clear()
             ax2.clear()
             ax1.plot(R,label=f"Simulation of R at iter {i}")
             ax1.plot(MAPR,label="MAP R")
             ax2.plot(O,label=f"Simulation of O at iter {i}")
-            ax2.plot(MAPR,label="MAP O")
+            ax2.plot(MAPO,label="MAP O")
             ax1.set_title("Évolution de R")
             ax2.set_title("Évolution de O")
             ax1.legend()
             ax2.legend()
         
-            plt.pause(0.1) 
     if(wait_conv):
         end_burn_in=int(niter/2)
     
@@ -199,6 +198,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
             
         theta_tab[i+1,:] = theta
         if ((i+1) % 50000) == 0:
+            print(i+1)
             R,O=np.split(theta,2)
             ax1.clear()
             ax2.clear()
@@ -209,7 +209,6 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
             ax1.legend()
             ax2.legend()
         
-            plt.pause(0.1) 
             
     plt.ioff()
     plt.show()
