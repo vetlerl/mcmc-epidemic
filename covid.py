@@ -112,7 +112,6 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     wait_conv = False
     acceptance_cnt = 0
     rd = npr.uniform(0, 1, int(niter+1))
-    
     theta_tab = np.empty((int(niter+1), 2*T))
     theta_tab[0,:]=theta
     theta_tilde_tab = np.empty((int(niter+1), 2*T))
@@ -157,15 +156,15 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
             gammas.append(gamma)
             accepts.append(accept_rate)
             acceptance_cnt = 0
-            #if burn_in:
-            #    burn_in = abs(accept_rate - accept_final) > 1e-2
-            #    wait_conv = not burn_in
-            #elif wait_conv:
-            #    converge += 1
-            #    wait_conv = converge < 2e-4 * niter
-            #    if not(wait_conv):
-            #        end_burn_in=i
-            #        break
+            if burn_in:
+                burn_in = abs(accept_rate - accept_final) > 1e-2
+                wait_conv = not burn_in
+            elif wait_conv:
+                converge += 1
+                wait_conv = converge < 2e-4 * niter
+                if not(wait_conv):
+                    end_burn_in=i
+                    break
         if ((i+1) % 50000) == 0:
             print(i+1)
             R,O=np.split(theta,2)
@@ -181,7 +180,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
             ax2.legend()
             plt.draw()
             plt.pause(0.1)
-    if(True):
+    if(wait_conv):
         end_burn_in=int(niter/2)
     
     print("End of the burn-in")
@@ -196,8 +195,9 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
+                
+        theta_tab[i+1,:]=theta 
             
-        theta_tab[i+1,:] = theta
         if ((i+1) % 50000) == 0:
             print(i+1)
             R,O=np.split(theta,2)
@@ -215,3 +215,4 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     plt.show()
     theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
     return theta_tab,theta_tilde_tab, accepts, gammas,end_burn_in
+
