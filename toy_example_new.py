@@ -20,7 +20,7 @@ def BuildA(Delta,Vt):
     A = np.diag(Delta) @ Vt
     return A
 #sh
-def Buildsh(T,a,b):
+def Buildsh(T, a, b):
     sh = np.zeros(T)
     sh[0] = (a-2*b)/4
     sh[1] = b/4
@@ -131,7 +131,7 @@ def Quantiles(sim_tab,q,T):
 
 #log_pi
 def LogDistributionPi(x, Y, A, D, sh, Lambda):
-    return (-npl.norm(Y - A@x)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
+    return (-npl.norm(Y - A@x, ord=2)**2)/2-Lambda*npl.norm(D@x + sh,ord=1)
 
 #pi
 def DistributionPi(x, Y, A, D, sh, Lambda):
@@ -139,7 +139,7 @@ def DistributionPi(x, Y, A, D, sh, Lambda):
 
 #log_pi_tilde
 def LogDistributionPi_tilde(x_tilde, Y, U, sh, Lambda):
-    return (-npl.norm(U@Y - x_tilde)**2)/2-Lambda*npl.norm(x_tilde + sh,ord=1)
+    return (-npl.norm(U@Y - x_tilde, ord=2)**2)/2-Lambda*npl.norm(x_tilde + sh, ord=1)
 
 #pi_tilde
 def DistributionPi_tilde(x_tilde, Y, U, sh, Lambda):
@@ -174,7 +174,11 @@ def DriftImage(theta_tilde, Y, U, sh, Lambda, gamma):
     N = len(theta_tilde)
     nabla_f = -(U@Y-theta_tilde)
     tau = theta_tilde - gamma*nabla_f + sh
-    return -sh + np.sign(tau)*np.maximum(np.abs(tau) - Lambda*gamma*np.ones(N), np.zeros(N))
+    abs_tau = np.abs(tau)
+    threshold = Lambda*gamma*np.ones(N)
+    diff = abs_tau - threshold
+    return -sh + np.sign(tau)*np.maximum(diff, np.zeros(N))
+
 
 #MetropolisHastings algorithm - returns all parameters + a plot
 def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_state=None):
@@ -203,8 +207,8 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     U, Delta, Vt = BuildUVDelta(D)
     A = BuildA(Delta, Vt)
     sh = Buildsh(T, a, b)
-    x, x_tilde = ComputeArgmax(T, Lambda, Y, a, b)
-    mu, mu_tilde = ComputeMeans(T, Lambda, Y, a, b)
+    x, _ = ComputeArgmax(T, Lambda, Y, a, b)
+    mean, _ = ComputeMeans(T, Lambda, Y, a, b)
     gamma = 0.001
 
     accept_final = 0.24
@@ -213,9 +217,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     rd = npr.uniform(0, 1, int(niter+1))
 
     end_burn_in = None
-    converge=0
-    burn_in=True
-    wait_conv=False
+    convergence_cnt = 0
     
 
     gammas = []
@@ -231,7 +233,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
         ax.set_xlabel(r"Component of $\theta$ / time axis")
         ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
         ax.plot(x, color="salmon", label="argmax")
-        ax.plot(mu, color="purple", label="theoretical mean")
+        ax.plot(mean, color="purple", label="theoretical mean")
         theta_tab[0] = theta #we save the initial point
         for i in range(int(niter/2)):
             if is_subdiff:
@@ -265,18 +267,18 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 accepts.append(accept_rate)
                 accept_cnt = 0 #reset
                 gamma += (accept_rate - accept_final) * gamma
-                if burn_in:
-                    burn_in = abs(accept_rate - accept_final) > 1e-2
-                    wait_conv = not burn_in
-                elif wait_conv:
-                    converge += 1
-                    wait_conv = converge < 2e-4 * niter
-                    if not(wait_conv):
-                        end_burn_in=i
+                if end_burn_in is None:
+                    end_burn_in = i if abs(accept_rate - accept_final) > 1e-2 else None
+                else:
+                    convergence_cnt += 1
+                    if convergence_cnt > 2e-4 * niter:
+                        end_burn_in = i + 2e-4 * niter
                         break
                 
         if end_burn_in is None:
             end_burn_in = int(niter/2)-1
+        else:
+            end_burn_in = int(end_burn_in)
         print(f"ended burn-in @ {end_burn_in:d}: {accepts[-1]-accept_final:.3f}")
             
         gammas = np.array(gammas)
@@ -311,10 +313,12 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
         ax.set_xlabel(r"Component of $\theta$ / time axis")
         ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
         ax.plot(x, color="salmon", label="argmax")
-        ax.plot(mu, color="purple", label="theoretical mean")
+        ax.plot(mean, color="purple", label="theoretical mean")
 
         D_1 = npl.solve(D, np.identity(T))
-        super_D = npl.solve(D_1@D_1.T, np.identity(T))
+        # super_D = npl.solve(D@D.T, np.identity(T))
+        # super_D = np.identity(T) #!!! NEED TO SPEAK WITH ADVISOR ON THIS
+        super_D = D_1@D_1.T
         theta = D @ theta #we save theta_tildes in the theta variable
         theta_tab[0] = theta #we save all theta_tildes in theta_tab, including initial theta_tilde
         for i in range(int(niter/2)):
@@ -326,12 +330,18 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 mu = theta
             
             #covariance matrix changes
-            candidate = npr.multivariate_normal(mu, gamma * D_1@D_1.T)
+            candidate = npr.multivariate_normal(mu, gamma * D@D.T)
             if not is_prox:
                 log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
             else:
-                mu_cand = DriftImage(theta, Y, U, sh, Lambda, gamma)
-                log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda) - (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma) + (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
+                mu_cand = DriftImage(candidate, Y, U, sh, Lambda, gamma)
+                mu_cand    = DriftImage(candidate, Y, U, sh, Lambda, gamma)
+                logpi_cand = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) 
+                logpi      = LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
+                dist_1     = (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
+                dist_2     = (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma)
+                log_alpha  = logpi_cand - logpi - dist_1 + dist_2
+                
             if log_alpha >= 0 :
                 theta = candidate
                 accept_cnt += 1
@@ -349,18 +359,18 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 accepts.append(accept_rate)
                 accept_cnt = 0 #reset
                 gamma += (accept_rate - accept_final) * gamma
-                if burn_in:
-                    burn_in = abs(accept_rate - accept_final) > 1e-2
-                    wait_conv = not burn_in
-                elif wait_conv:
-                    converge += 1
-                    wait_conv = converge < 2e-4 * niter
-                    if not(wait_conv):
-                        end_burn_in=i
+                if end_burn_in is None:
+                    end_burn_in = i if abs(accept_rate - accept_final) > 1e-2 else None
+                else:
+                    convergence_cnt += 1
+                    if convergence_cnt > 2e-4 * niter:
+                        end_burn_in = i + 2e-4 * niter
                         break
                         
         if end_burn_in is None:
             end_burn_in = int(niter/2)-1
+        else:
+            end_burn_in = int(end_burn_in)
         print(f"ended burn-in @ {end_burn_in:d}: {accepts[-1]-accept_final:.3f}")
         
         gammas = np.array(gammas)
@@ -374,13 +384,17 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
             else:
                 mu = theta
 
-            candidate = npr.multivariate_normal(mu, gamma * D_1@D_1.T) #covariance matrix changes
+            candidate = npr.multivariate_normal(mu, gamma * D@D.T)
             if not is_prox:
                 log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
             else:
-                mu_cand = DriftImage(theta, Y, U, sh, Lambda, gamma)
-                log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda) - (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma) + (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
-            
+                mu_cand = DriftImage(candidate, Y, U, sh, Lambda, gamma)
+                logpi_cand = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) 
+                logpi      = LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
+                dist_1     = (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
+                dist_2     = (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma)
+                log_alpha = logpi_cand - logpi - dist_1 + dist_2 
+               
             if log_alpha >= 0 :
                 theta = candidate
                 accept_cnt += 1
@@ -418,10 +432,14 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
     sh = Buildsh(T, a, b)
 
     gamma = 0.001*np.ones(T)
+    gammas = [gamma]
     accept_final = 0.24
-    accept_rate = np.zeros(T)
-    accept_cnt  = np.zeros(T)
-    end_burn_in = np.zeros(T)
+    accept_rate  = np.zeros(T)
+    accepts = []
+    accept_cnt   = np.zeros(T)
+    end_burn_in  = np.zeros(T)
+    convergence_cnt = np.zeros(T)
+    burn_in      = True
 
     theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) #initial point
     theta_tab = np.empty((int(niter) + 1, T))
@@ -445,31 +463,32 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
             accept_cnt += bool_map
 
             #burn-in
-            if ((i+1) % 1000) == 0 and (end_burn_in == 0).any():
+            if ((i+1) % 1000) == 0:
                 accept_rate = accept_cnt/1000
+                accepts.append(accept_rate)
                 accept_cnt = np.zeros(T) #reset
-                gamma += (accept_rate - accept_final) * gamma
-                tmp_burn_in = np.abs(accept_rate - accept_final) <= 1e-2
-                update_map = end_burn_in == 0
-                end_burn_in[update_map] = i * tmp_burn_in[update_map]
-                if burn_in:
-                    burn_in = abs(accept_rate - accept_final) > 1e-2
-                    wait_conv = not burn_in
-                elif wait_conv:
-                    converge += 1
-                    wait_conv = converge < 2e-4 * niter
-                    if not(wait_conv):
-                        end_burn_in=i
-                        break
+                omega = accept_rate - accept_final
+                burn_in_update_map = end_burn_in == 0
+                end_burn_in += i * (np.abs(omega) <= 1e-2) *burn_in_update_map
+                gamma_update_map = convergence_cnt < (2e-4 * niter)
+                gamma += omega * gamma_update_map
+                gammas.append(gamma)
+                convergence_cnt += gamma_update_map * ~burn_in_update_map #i love numpy
+                
+                
                 
     #------------- Case: Image -------------#    
     else:
-        theta_tab[0] = D @ theta
         D_1 = npl.solve(D, np.identity(T))
-        super_D = npl.solve(D_1@D_1.T, np.identity(T))
+        theta = D @ theta
+        theta_tab[0] = theta
+        # super_D = D_1@D_1.T #!!!! NEED TO SPEAK WITH ADVISOR ON THIS
+        super_D = np.identity(T)
+        
+        
         for i in range(int(niter)):
             mu = DriftImage(theta, Y, U, sh, Lambda, gamma)
-            candidate = npr.multivariate_normal(mu, np.diag(gamma) * D_1@D_1.T)
+            candidate = npr.multivariate_normal(mu, np.diag(gamma))
             mu_cand   = DriftImage(candidate, Y, U, sh, Lambda, gamma)
 
             log_alpha = np.apply_along_axis(LogDistributionPi_tilde, 0, candidate, Y=Y, U=U, sh=sh, Lambda=Lambda) - np.apply_along_axis(LogDistributionPi_tilde, 0, theta, Y=Y, U=U, sh=sh, Lambda=Lambda) - (theta - mu_cand) @ super_D @ (theta - mu_cand)/2*gamma + (candidate - mu) @ super_D @ (candidate - mu)/2*gamma
@@ -488,13 +507,18 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
             #burn-in
             if ((i+1) % 1000) == 0 and (end_burn_in == 0).any():
                 accept_rate = accept_cnt/1000
+                accepts.append(accept_rate)
                 accept_cnt = np.zeros(T) #reset
-                gamma += (accept_rate - accept_final) * gamma
-                tmp_burn_in = np.abs(accept_rate - accept_final) <= 1e-2
-                update_map = end_burn_in == 0
-                end_burn_in[update_map] = i * tmp_burn_in[update_map]
+                omega = accept_rate - accept_final
+                burn_in_update_map = end_burn_in == 0
+                end_burn_in += i * (np.abs(omega) <= 1e-2) *burn_in_update_map
+                gamma_update_map = convergence_cnt < (2e-4 * niter)
+                gamma += omega * gamma_update_map
+                gammas.append(gamma)
+                convergence_cnt += gamma_update_map * ~burn_in_update_map
+        
         #we need to convert our theta_tildes to theta
         theta_tab = (D_1 @ theta_tab.T).T
-    return theta_tab, end_burn_in
+    return theta_tab, np.array(accepts), np.array(gammas), end_burn_in+convergence_cnt
 
 

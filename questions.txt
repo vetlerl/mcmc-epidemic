@@ -1,0 +1,13 @@
+Question for the 29.04.2025 meeting:
+
+
+- How is the covariance matrix for the candidate distribution chosen?
+
+Let's say we sample theta's candidate from a reduced multivariate gaussian distribution.
+Then, by the linear relationship between the two variables, theta_tilde's candidate should be sampled from a multivariate gaussian distribution
+with covariance matrix DD^T. 
+
+This affects how alpha is computed, as we can no longer say that the inverse of the covariance matrix is 1/gamma. 
+The expression for log alpha becomes more complicated.
+When using the proximal dual sampler in the image space, with a non-trivial (i.e. DD^T) covariance matrix, the algorithm didn't converge.
+I had numerous overflows and many warnings saying my covariance matrix was not positive-definite. What to do?
