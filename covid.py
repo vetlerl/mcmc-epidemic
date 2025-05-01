@@ -18,7 +18,8 @@ def log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c,C):
     
     shR, shO = np.split(barsh, 2)
     R, O = np.split(theta, 2) 
-    log_pi_val = -np.sum(R*phi + c*O - Z*np.log(R*phi + c*O + 1e-10)) - lambda_R*np.linalg.norm(D@R + shR, ord = 1) - lambda_O*np.linalg.norm(C@O+shO, ord = 1)
+    temp_c = R*phi + c*O
+    log_pi_val = -np.sum(temp_c - Z*np.log(temp_c)) - lambda_R*np.linalg.norm(D@R + shR, ord = 1) - lambda_O*np.linalg.norm(C@O+shO, ord = 1)
     
     return log_pi_val
 
@@ -44,15 +45,16 @@ def load_data(file_Z,file_phi):
     return np.array(Z),np.array(phi)
 
 def CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov):
+    
     R,O=np.split(theta,2)
     gradfR=phi-Z*phi/(R*phi+c*O)
-    gradfO=c-Z*phi/(R*c+c*O)
-    subgradg=(A.T)@np.sign(A@theta+barsh)
+    gradfO=c-Z*c/(R*phi+c*O)
+    subgradg=lambda_R*(A.T)@np.sign(A@theta+barsh)
     gradf=np.concatenate((gradfR,gradfO))
     return theta - (gamma/2)*Cov@gradf - (gamma/2)*Cov@subgradg
 
 def Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh):
-
+    
     return 0
     
 def PD3S(Z, phi, niter = 1e5):
@@ -135,6 +137,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     theta_tab[0,:]=theta
     theta_tilde_tab = np.empty((int(niter+1), 2*T))
     converge=0
+    logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
 
     # for plotting
 
@@ -151,15 +154,18 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
 
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
+        log_alpha = logpi_candidate - logpi_courant
         
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
+            logpi_courant = logpi_candidate
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
+                logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta   
         
@@ -191,12 +197,17 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        
+        log_alpha = logpi_candidate -logpi_courant
+        
         if log_alpha >=0 :
             theta = candidate
+            logpi_courant = logpi_candidate
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
+                logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta 
         if ((i+1) % 50000) == 0:
@@ -239,6 +250,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     theta_tab[0,:]=theta
     theta_tilde_tab = np.empty((int(niter+1), 2*T))
     converge=0
+    logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
 
     # for plotting
 
@@ -255,15 +267,18 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
 
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        log_alpha = logpi_candidate - logpi_courant + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov)) -np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))
             
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
+            logpi_courant = logpi_candidate
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
+                logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta   
         
@@ -283,7 +298,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
                 if not(wait_conv):
                     end_burn_in=i
                     break
-        if ((i+1) % 50000) == 0:
+        if ((i+1) % 10000) == 0:
             print(i)
             
     if(wait_conv):
@@ -295,13 +310,16 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov))
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov))
 
         if log_alpha >=0 :
             theta = candidate
+            logpi_candidate = logpi_courant
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
+                logpi_candidate = logpi_courant
                 
         theta_tab[i+1,:]=theta 
         if ((i+1) % 50000) == 0:
@@ -324,6 +342,7 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
     is_image = method in ["image"]
     is_source = method in ["source"]
+    logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
     
     # Covariance matrix Cov
     if is_image:
@@ -360,15 +379,18 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
 
         mu = Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        log_alpha = logpi_candidate - logpi_courant
             
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
+            logpi_courant = logpi_candidate
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
                 acceptance_cnt += 1
+                logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta   
         
@@ -399,12 +421,15 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
-        log_alpha = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )-log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
+        log_alpha = logpi_candidate -logpi_courant
         if log_alpha >=0 :
             theta = candidate
+            logpi_courant = logpi_candidate
         else:
             if rd[i] <= np.exp(log_alpha): # probability alpha of success
                 theta = candidate
+                logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta 
         if ((i+1) % 50000) == 0:
