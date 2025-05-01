@@ -103,7 +103,7 @@ def PD3S(Z, phi, niter = 1e5):
         
     return theta
 
-def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
+def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     
     a = 0.73597
     b = 0.73227
@@ -135,7 +135,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     rd = npr.uniform(0, 1, int(niter+1))
     theta_tab = np.empty((int(niter+1), 2*T))
     theta_tab[0,:]=theta
-    theta_tilde_tab = np.empty((int(niter+1), 2*T))
+    #theta_tilde_tab = np.empty((int(niter+1), 2*T))
     converge=0
     logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
 
@@ -146,14 +146,19 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     gammas.append(gamma)
     accepts.append(0)
     
-    #Computation of the MAP for comparison
-    MAPR,MAPO=np.split(MAP,2)
 
     # burn-in loop
     for i in range(int(niter/2)):
 
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
+        
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
         log_alpha = logpi_candidate - logpi_courant
         
@@ -197,6 +202,13 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
+        
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
         
         log_alpha = logpi_candidate -logpi_courant
@@ -213,10 +225,10 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
         if ((i+1) % 50000) == 0:
             print(i)   
             
-    theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
-    return theta_tab,theta_tilde_tab, accepts, gammas,end_burn_in
+    #theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
+    return theta_tab, accepts, gammas,end_burn_in
 
-def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
+def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     
     a = 0.73597
     b = 0.73227
@@ -248,7 +260,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     rd = npr.uniform(0, 1, int(niter+1))
     theta_tab = np.empty((int(niter+1), 2*T))
     theta_tab[0,:]=theta
-    theta_tilde_tab = np.empty((int(niter+1), 2*T))
+    #theta_tilde_tab = np.empty((int(niter+1), 2*T))
     converge=0
     logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
 
@@ -259,17 +271,24 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     gammas.append(gamma)
     accepts.append(0)
     
-    #Computation of the MAP for comparison
-    MAPR,MAPO=np.split(MAP,2)
     
     # burn-in loop
     for i in range(int(niter/2)):
 
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
+        
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-        log_alpha = logpi_candidate - logpi_courant + np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov)) -np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))
-            
+        dens_courant=np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov))
+        dens_candidate=-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))
+        log_alpha = logpi_candidate - logpi_courant + dens_courant - dens_candidate
+
         if log_alpha >=0 :
             theta = candidate
             acceptance_cnt += 1
@@ -279,7 +298,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
                 theta = candidate
                 acceptance_cnt += 1
                 logpi_courant = logpi_candidate
-                
+
         theta_tab[i+1,:]=theta   
         
         # burn-in
@@ -298,8 +317,8 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
                 if not(wait_conv):
                     end_burn_in=i
                     break
-        if ((i+1) % 10000) == 0:
-            print(i)
+        if ((i+1) % 50000) == 0:
+            print(i+1)
             
     if(wait_conv):
         end_burn_in=int(niter/2)
@@ -310,6 +329,12 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
         log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma*Cov))
 
@@ -325,10 +350,10 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
         if ((i+1) % 50000) == 0:
             print(i)  
             
-    theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
-    return theta_tab,theta_tilde_tab, accepts, gammas,end_burn_in
+    #theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
+    return theta_tab, accepts, gammas,end_burn_in
 
-def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
+def MHProx(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     
     a = 0.73597
     b = 0.73227
@@ -361,7 +386,7 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     rd = npr.uniform(0, 1, int(niter+1))
     theta_tab = np.empty((int(niter+1), 2*T))
     theta_tab[0,:]=theta
-    theta_tilde_tab = np.empty((int(niter+1), 2*T))
+    #theta_tilde_tab = np.empty((int(niter+1), 2*T))
     converge=0
 
     # for plotting
@@ -371,16 +396,20 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     gammas.append(gamma)
     accepts.append(0)
     
-    #Computation of the MAP for comparison
-    MAPR,MAPO=np.split(MAP,2)
     
     # burn-in loop
     for i in range(int(niter/2)):
 
         mu = Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh)
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-        log_alpha = logpi_candidate - logpi_courant
+        log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
             
         if log_alpha >=0 :
             theta = candidate
@@ -421,8 +450,14 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
     for i in range(end_burn_in,int(niter)):
         mu = theta
         candidate = npr.multivariate_normal(mu, gamma*Cov)
+        #Verify values of R>0 and R+O>0
+        R,O=np.split(candidate,2)
+        R[R < 0] = 0
+        s = R+O
+        O[s<0] = 0
+        candidate=np.concatenate([R,O])
         logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-        log_alpha = logpi_candidate -logpi_courant
+        log_alpha = logpi_candidate -logpi_courant -np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
         if log_alpha >=0 :
             theta = candidate
             logpi_courant = logpi_candidate
@@ -435,5 +470,5 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,MAP,niter=1e5,method="source"):
         if ((i+1) % 50000) == 0:
             print(i)    
             
-    theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
-    return theta_tab,theta_tilde_tab, accepts, gammas,end_burn_in
+    #theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
+    return theta_tab, accepts, gammas,end_burn_in
