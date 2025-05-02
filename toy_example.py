@@ -46,7 +46,7 @@ def Computation_Y_exp(T, Lambda,a,b):
     rd = npr.uniform(0, 1, T)
     x_tilde_true = np.where(rd < param_accept, npr.exponential(1/Lambda, T), 0)*(2*npr.binomial(1,1/2,T) - 1) - sh   
     x_true = npl.solve(D, x_tilde_true)
-    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Y = A@x_true + npr.normal(0, 1, T)
     
     """
     x_tilde_true = np.zeros(T)
@@ -105,7 +105,7 @@ def Computation_Y_circ_det(T, pen = 0.99):
     for i in range(int(2*T/3), T):
         x_true[i] = coeff_dir * (i - int(2*T/3))
         
-    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Y = A@x_true + npr.normal(0, 1, T)
     Lambda=(- np.log(pen) / npl.norm(D@x_true + sh, ord = 1))
     
     return Y,Lambda, a, b
@@ -131,7 +131,7 @@ def Computation_Y_circ_test(T, a, b):
         x_true[i] = coeff_dir * (i - int(T/3)) + 2
 
     x_true = 10*x_true
-    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Y = A@x_true + npr.normal(0,1,T)
     
     return Y
 
@@ -156,7 +156,7 @@ def Computation_Y_circ_det_debug(T, pen = 0.99):
         x_true[i] = coeff_dir * (i - int(2*T/3)) + 2
 
     x_tilde_true = D@x_true
-    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Y = A@x_true + npr.normal(0,1,T)
     Lambda=(- np.log(pen) / npl.norm(D@x_true + sh, ord = 1))
     
     return Y, x_true, x_tilde_true,Lambda
@@ -174,7 +174,7 @@ def Computation_Y_simu_debug(T, Lambda, a, b):
     #print(2*npr.binomial(T,1/2)-1)
     #print((np.where(rd < param_accept, npr.exponential(1/Lambda, T), 0))*(2*npr.binomial(T,1/2)-1))
     x_true = npl.solve(D, x_tilde_true)
-    Y = npr.multivariate_normal(A @ x_true, np.identity(T))
+    Y = A@x_true + npr.normal(0,1,T)
     
     return (Y, x_true, x_tilde_true)
     
@@ -346,7 +346,7 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
     for i in range(int(niter)/2):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate =  mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C)
             
         if log_alpha >=0 :
@@ -386,7 +386,7 @@ def MetropolisHastingsFull(T, Lambda, Y, a,b, niter=1e5,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C)
         if log_alpha >=0 :
             theta = candidate
@@ -477,7 +477,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     for i in range(int(niter/2)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate =  mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
             
         if log_alpha >=0 :
@@ -517,7 +517,7 @@ def MetropolisHastings(T, Lambda, Y, a,b,niter=1e5,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate =  mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -637,7 +637,7 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
     for i in range(int(niter/2)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
             
         if log_alpha >=0 :
@@ -673,7 +673,7 @@ def MetropolisHastingsFast(T, Lambda, Y, a,b, niter=1e5, method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -732,7 +732,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     for i in range(int(niter/2)):
         
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
 
         log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
 
@@ -777,7 +777,7 @@ def MH_Prox_Image(T, Lambda, Y, a, b, niter=1e5, save = True):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         
         log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(4*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(4*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
         
@@ -842,7 +842,7 @@ def MH_Prox_Source(T, Lambda, Y, a, b, niter=1e5):
     for i in range(int(niter/2)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         mu_cand = DriftSource(candidate, gamma, Lambda, A, Y, D, sh)
         log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
         - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
@@ -888,7 +888,7 @@ def MH_Prox_Source(T, Lambda, Y, a, b, niter=1e5):
     for i in range(end_burn_in,int(niter)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         
         log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
         - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
@@ -991,7 +991,7 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     for i in range(int(0.5*niter)):
 
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
             
         if log_alpha >=0 :
@@ -1029,7 +1029,7 @@ def MetropolisHastings_test(T, Lambda, Y, a,b, niter=1e6,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = MeanProposal(theta, gamma, A, Y, D, sh, C)
-        candidate = npr.multivariate_normal(mu, gamma*C)
+        candidate = mu + np.sqrt(gamma)*C@npr.normal(0,1,T)
         log_alpha = LogRatio(candidate, theta, mu, gamma, A, Y, D, sh, C, Lambda)
         if log_alpha >=0 :
             theta = candidate
@@ -1075,7 +1075,7 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
 
         theta_tilde = D@theta
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
 
         log_alpha = -(1/2)*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +(1/2)*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) -(1/(4*gamma))*npl.norm(candidate - mu)**2 +(1/(4*gamma))*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
 
@@ -1121,7 +1121,7 @@ def MH_Prox_Image_test(T, Lambda, Y, a, b, niter=1e5):
 
         theta_tilde = D@theta
         mu = DriftImage(theta_tilde, gamma, Lambda, U, Y, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         
         log_alpha = -1/2*(npl.norm(U@Y - candidate)**2) + Lambda*npl.norm(candidate + sh, ord=1) +1/2*(npl.norm(U@Y - theta_tilde)**2) - Lambda*npl.norm(theta_tilde + sh,ord=1) - 1/(2*gamma)*npl.norm(candidate - DriftImage(theta_tilde, gamma, Lambda, U, Y, sh))**2 +1/(2*gamma)*npl.norm(theta_tilde - DriftImage(candidate, gamma, Lambda, U, Y, sh))**2
         
@@ -1167,7 +1167,7 @@ def MH_Prox_Source_test(T, Lambda, Y, a, b, niter=1e5):
     for i in range(int(niter/2)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         mu_cand = DriftSource(candidate, gamma, Lambda, A, Y, D, sh)
         log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
         - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
@@ -1212,7 +1212,7 @@ def MH_Prox_Source_test(T, Lambda, Y, a, b, niter=1e5):
     for i in range(end_burn_in,int(niter)):
 
         mu = DriftSource(theta, gamma, Lambda, A, Y, D, sh)
-        candidate = npr.multivariate_normal(mu, C)
+        candidate = mu + C@npr.normal(0,1,T)
         
         log_alpha = (LogDistributionPi(candidate, Y, A, D, sh, Lambda) + (-1/(2*gamma))*npl.norm(candidate - mu)**2
         - LogDistributionPi(theta, Y, A, D, sh, Lambda) - (-1/(2*gamma))*npl.norm(theta - mu_cand)**2)
