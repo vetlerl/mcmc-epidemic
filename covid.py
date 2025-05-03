@@ -5,10 +5,15 @@ import numpy.linalg as npl
 import numpy.random as npr
 import matplotlib.pyplot as plt
 import csv
-from toy_example import BuildD
 from scipy.stats import multivariate_normal
 from numpy.linalg import slogdet, inv
 
+def BuildD(T):
+    k = [np.ones(T),-2*np.ones(T-1),np.ones(T-2)]
+    offset = [0,-1,-2]
+    D = diags(k,offset).toarray()/4
+    return D
+    
 def Buildbarsh(T,a,b):
     barsh = np.zeros(2*T)
     barsh[0] = (a-2*b)/4
@@ -114,12 +119,12 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     a = 0.73597
     b = 0.73227
     gamma = 0.001
-    accept_final = 0.5
+    accept_final = 0.24
     D=BuildD(T)
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta = np.concatenate((np.array(Z/phi), np.zeros(T))) #Starting point
+    theta = np.concatenate((np.ones(T), np.zeros(T)))
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
     is_image = method in ["image"]
     is_source = method in ["source"]
@@ -127,7 +132,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     # Covariance matrix Cov
     if is_image:
         A_1 = npl.solve(A, np.identity(2*T))
-        Cov = A_1@A_1.T
+        #Cov = A_1@A_1.T
         linear_combination = A_1
     elif is_source:
         Cov = np.identity(2*T)
@@ -154,6 +159,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     gammas.append(gamma)
     accepts.append(0)
     
+    print(linear_combination)
 
     # burn-in loop
     for i in range(int(niter/2)):
@@ -163,7 +169,6 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
-        
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
             log_alpha = logpi_candidate - logpi_courant
             
@@ -176,7 +181,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
                     theta = candidate
                     acceptance_cnt += 1
                     logpi_courant = logpi_candidate
-                
+
         theta_tab[i+1,:]=theta   
         
         # burn-in
@@ -210,7 +215,6 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
-        
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
             
             log_alpha = logpi_candidate -logpi_courant
@@ -247,7 +251,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta =np.concatenate((np.array(Z/phi),  np.zeros(T))) #Starting point
+    theta = np.concatenate((np.ones(T), np.zeros(T)))
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
     is_image = method in ["image"]
     is_source = method in ["source"]
@@ -373,7 +377,7 @@ def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta = np.concatenate(Z/phi, np.zeros(T)) #Starting point
+    theta = np.concatenate((np.ones(T), np.zeros(T)))
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
     theta_tilde=A@theta
     A_1=np.linalg.solve(A,np.identity(2*T))
