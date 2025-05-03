@@ -55,9 +55,13 @@ def CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov):
     gradf=np.concatenate((gradfR,gradfO))
     return theta - (gamma/2)*Cov@gradf - (gamma/2)*Cov@subgradg
 
-def Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh):
-    
-    return 0
+def DriftImage(Z,phi,theta,gamma,lambda_R,A,c,barsh):
+    N = len(theta)
+    gradfR=phi-Z*phi/(R*phi+c*O)
+    gradfO=c-Z*c/(R*phi+c*O)
+    gradf=np.concatenate((gradfR,gradfO))
+    tau = theta - gamma*nabla_f + barsh
+    return barsh + np.sign(tau)*np.maximum(np.abs(tau) - lambda_R*gamma*np.ones(N), np.zeros(N))
     
 def PD3S(Z, phi, niter = 1e5):
     
@@ -110,7 +114,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     a = 0.73597
     b = 0.73227
     gamma = 0.001
-    accept_final = 0.24
+    accept_final = 0.5
     D=BuildD(T)
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
@@ -124,8 +128,10 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     if is_image:
         A_1 = npl.solve(A, np.identity(2*T))
         Cov = A_1@A_1.T
+        linear_combination = A_1
     elif is_source:
         Cov = np.identity(2*T)
+        linear_combination = np.identity(2*T)
     else:
         raise Exception("method must be either 'source' or 'image' ")
 
@@ -153,7 +159,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     for i in range(int(niter/2)):
 
         mu = theta
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
@@ -200,7 +206,7 @@ def MHRW(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = theta
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
@@ -241,7 +247,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta =np.concatenate((np.array(Z/phi), np.zeros(T))) #Starting point
+    theta =np.concatenate((np.array(Z/phi),  np.zeros(T))) #Starting point
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
     is_image = method in ["image"]
     is_source = method in ["source"]
@@ -250,8 +256,10 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     if is_image:
         A_1 = npl.solve(A, np.identity(2*T))
         Cov = A_1@A_1.T
+        linear_combination = A_1
     elif is_source:
         Cov = np.identity(2*T)
+        linear_combination = np.identity(2*T)
     else:
         raise Exception("method must be either 'source' or 'image' ")
     dim = Cov.shape[0]
@@ -281,7 +289,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     for i in range(int(niter/2)):
 
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
@@ -330,7 +338,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov)
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
@@ -355,7 +363,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     #theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
     return theta_tab, accepts, gammas,end_burn_in
 
-def MHProx(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
+def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
     
     a = 0.73597
     b = 0.73227
@@ -365,20 +373,15 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta = np.concatenate(Z/phi,np.zeros(T)) #Starting point
+    theta = np.concatenate(Z/phi, np.zeros(T)) #Starting point
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
+    theta_tilde=A@theta
+    A_1=np.linalg.solve(A,np.identity(2*T))
     is_image = method in ["image"]
     is_source = method in ["source"]
     logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
     
-    # Covariance matrix Cov
-    if is_image:
-        A_1 = npl.solve(A, np.identity(2*T))
-        Cov = A_1@A_1.T
-    elif is_source:
-        Cov = np.identity(2*T)
-    else:
-        raise Exception("method must be either 'source' or 'image' ")
+    Cov = np.identity(2*T)
 
     # Burn-in aux variables
     end_burn_in=int(niter/2)
@@ -397,18 +400,23 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     accepts = []
     gammas.append(gamma)
     accepts.append(0)
-    
+
+    dim = Cov.shape[0]
+    eigvals, eigvecs = np.linalg.eigh(Cov)  # symmetric matrix, so eigh is faster and more stable
     
     # burn-in loop
     for i in range(int(niter/2)):
 
-        mu = Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh)
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        mu_tilde = DriftImage(Z,phi,theta,gamma,lambda_R,A,c,barsh)
+        candidate_tilde = mu_tilde + np.sqrt(gamma)*npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-            log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
+            dens_courant= fast_logpdf(theta_tilde, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma, eigvals, eigvecs, dim)
+            dens_candidate=-fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
+            log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
+            log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu_tilde, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
                 
             if log_alpha >=0 :
                 theta = candidate
@@ -448,7 +456,7 @@ def MHProx(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
         mu = theta
-        candidate = mu + np.sqrt(gamma)*Cov@npr.normal(0, 1, 2*T)
+        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
