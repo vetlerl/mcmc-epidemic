@@ -60,13 +60,14 @@ def CalculSubdiff(Z,phi,theta,A,c,lambda_R,lambda_O,barsh,gamma,Cov):
     gradf=np.concatenate((gradfR,gradfO))
     return theta - (gamma/2)*Cov@gradf - (gamma/2)*Cov@subgradg
 
-def DriftImage(Z,phi,theta,gamma,lambda_R,A,c,barsh):
-    N = len(theta)
+def DriftImage(Z,phi,theta_tilde,gamma,lambda_R,c,barsh):
+    T =len(Z)
+    R,O=np.split(theta_tilde,2)
     gradfR=phi-Z*phi/(R*phi+c*O)
     gradfO=c-Z*c/(R*phi+c*O)
     gradf=np.concatenate((gradfR,gradfO))
-    tau = theta - gamma*nabla_f + barsh
-    return barsh + np.sign(tau)*np.maximum(np.abs(tau) - lambda_R*gamma*np.ones(N), np.zeros(N))
+    tau = theta_tilde - (gamma/2)*gradf + barsh
+    return -barsh + np.sign(tau)*np.maximum(np.abs(tau) - lambda_R*(gamma/2)*np.ones(2*T), np.zeros(2*T))
     
 def PD3S(Z, phi, niter = 1e5):
     
@@ -377,12 +378,12 @@ def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
     barsh = Buildbarsh(T,a,b)
     c = np.array(phi)
     C = np.diag(c)
-    theta = np.concatenate((np.ones(T), np.zeros(T)))
+    theta_tilde = np.concatenate((1e-4*np.ones(T), np.zeros(T)))
     A = np.block([[D, np.zeros((T,T))],[np.zeros((T,T)), (lambda_O/lambda_R)*C]])
-    theta_tilde=A@theta
     A_1=np.linalg.solve(A,np.identity(2*T))
-    is_image = method in ["image"]
-    is_source = method in ["source"]
+    theta=A_1@theta_tilde
+    #is_image = method in ["image"]
+    #is_source = method in ["source"]
     logpi_courant = log_pi(theta, phi,Z, lambda_R, D, barsh, lambda_O,c ,C)
     
     Cov = np.identity(2*T)
@@ -411,28 +412,30 @@ def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
     # burn-in loop
     for i in range(int(niter/2)):
 
-        mu_tilde = DriftImage(Z,phi,theta,gamma,lambda_R,A,c,barsh)
+        mu_tilde = DriftImage(Z,phi,theta_tilde,gamma,lambda_R,c,barsh)
         candidate_tilde = mu_tilde + np.sqrt(gamma)*npr.normal(0, 1, 2*T)
+        candidate=A_1@candidate_tilde
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-            dens_courant= fast_logpdf(theta_tilde, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma, eigvals, eigvecs, dim)
-            dens_candidate=-fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
+            dens_courant= fast_logpdf(theta_tilde, DriftImage(Z,phi,candidate_tilde,gamma,lambda_R,c,barsh), gamma, eigvals, eigvecs, dim)
+            dens_candidate=-fast_logpdf(candidate_tilde, mu_tilde, gamma, eigvals, eigvecs, dim)
             log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
-            log_alpha = logpi_candidate - logpi_courant-np.log(sps.multivariate_normal.pdf(candidate, mu_tilde, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
                 
             if log_alpha >=0 :
+                theta_tilde = candidate_tilde
                 theta = candidate
                 acceptance_cnt += 1
                 logpi_courant = logpi_candidate
             else:
                 if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                    theta_tilde = candidate_tilde
                     theta = candidate
                     acceptance_cnt += 1
                     logpi_courant = logpi_candidate
                 
-        theta_tab[i+1,:]=theta   
+        theta_tab[i+1,:]=theta  
         
         # burn-in
         if ((i+1) % 1000) == 0:
@@ -459,24 +462,32 @@ def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
 
     ## convergence loop
     for i in range(end_burn_in,int(niter)):
-        mu = theta
-        candidate = mu + np.sqrt(gamma)*linear_combination@npr.normal(0, 1, 2*T)
+        mu_tilde = DriftImage(Z,phi,theta_tilde,gamma,lambda_R,c,barsh)
+        candidate_tilde = mu_tilde + np.sqrt(gamma)*npr.normal(0, 1, 2*T)
+        candidate=A_1@candidate_tilde
         #Verify values of R>0 and R+O>0
         R,O=np.split(candidate,2)
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
-            log_alpha = logpi_candidate -logpi_courant -np.log(sps.multivariate_normal.pdf(candidate, mu, gamma*Cov))+np.log(sps.multivariate_normal.pdf(theta, Drift(Z,phi,theta,A,c,lambda_R,lambda_O,barsh),gamma*Cov))
+            dens_courant= fast_logpdf(theta_tilde, DriftImage(Z,phi,candidate_tilde,gamma,lambda_R,c,barsh), gamma, eigvals, eigvecs, dim)
+            dens_candidate=-fast_logpdf(candidate_tilde, mu_tilde, gamma, eigvals, eigvecs, dim)
+            log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
+                
             if log_alpha >=0 :
+                theta_tilde = candidate_tilde
                 theta = candidate
+                acceptance_cnt += 1
                 logpi_courant = logpi_candidate
             else:
                 if rd[i] <= np.exp(log_alpha): # probability alpha of success
+                    theta_tilde = candidate_tilde
                     theta = candidate
+                    acceptance_cnt += 1
                     logpi_courant = logpi_candidate
                 
-        theta_tab[i+1,:]=theta 
+        theta_tab[i+1,:]=theta     
         if ((i+1) % 50000) == 0:
             print(i)    
             
-    #theta_tilde_tab = np.einsum('ij,kj->ki', A, theta_tab)
+    #theta_tab = np.einsum('ij,kj->ki', A_1, theta_tab)
     return theta_tab, accepts, gammas,end_burn_in
