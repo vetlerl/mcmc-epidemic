@@ -66,8 +66,8 @@ def DriftImage(Z,phi,theta_tilde,gamma,lambda_R,c,barsh):
     gradfR=phi-Z*phi/(R*phi+c*O)
     gradfO=c-Z*c/(R*phi+c*O)
     gradf=np.concatenate((gradfR,gradfO))
-    tau = theta_tilde - (gamma/2)*gradf + barsh
-    return -barsh + np.sign(tau)*np.maximum(np.abs(tau) - lambda_R*(gamma/2)*np.ones(2*T), np.zeros(2*T))
+    tau = theta_tilde - (gamma/2)*gradf
+    return -barsh + np.sign(tau + barsh)*np.maximum(np.abs(tau + barsh) - lambda_R*(gamma/2)*np.ones(2*T), np.zeros(2*T))
     
 def PD3S(Z, phi, niter = 1e5):
     
@@ -301,7 +301,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
         
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )        
             dens_courant= fast_logpdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma, eigvals, eigvecs, dim)
-            dens_candidate=-fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
+            dens_candidate=fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
             log_alpha = logpi_candidate - logpi_courant + dens_courant - dens_candidate
     
             if log_alpha >=0 :
@@ -350,7 +350,7 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
             
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
             dens_courant= fast_logpdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma, eigvals, eigvecs, dim)
-            dens_candidate=-fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
+            dens_candidate=fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
             log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
     
             if log_alpha >=0 :
@@ -420,7 +420,7 @@ def MHProxImage(T, Z, phi, lambda_R,lambda_O,niter=1e5):
         if(np.all(R>=0))and(np.all((R*phi+c*O)>0)):
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
             dens_courant= fast_logpdf(theta_tilde, DriftImage(Z,phi,candidate_tilde,gamma,lambda_R,c,barsh), gamma, eigvals, eigvecs, dim)
-            dens_candidate=-fast_logpdf(candidate_tilde, mu_tilde, gamma, eigvals, eigvecs, dim)
+            dens_candidate=fast_logpdf(candidate_tilde, mu_tilde, gamma, eigvals, eigvecs, dim)
             log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
                 
             if log_alpha >=0 :
