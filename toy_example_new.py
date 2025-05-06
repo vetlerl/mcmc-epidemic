@@ -225,15 +225,13 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) #initial point
     theta_tab = np.empty((int(niter) + 1, T))
     fig,ax = plt.subplots(1,1)
-
+    ax.set_ylabel("Value")
+    ax.set_xlabel(r"Component of $\theta$ / time axis")
+    ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
 
     #------------- Case: Source -------------#
     if is_source:
-        ax.set_ylabel("Value")
-        ax.set_xlabel(r"Component of $\theta$ / time axis")
-        ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
-        ax.plot(x, color="salmon", label="argmax")
-        ax.plot(mean, color="purple", label="theoretical mean")
+        
         theta_tab[0] = theta #we save the initial point
         for i in range(int(niter/2)):
             if is_subdiff:
@@ -309,51 +307,43 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     
     #------------- Case: Image -------------#
     else:
-        ax.set_ylabel("Value")
-        ax.set_xlabel(r"Component of $\theta$ / time axis")
-        ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
-        ax.plot(x, color="salmon", label="argmax")
-        ax.plot(mean, color="purple", label="theoretical mean")
 
         D_1 = npl.solve(D, np.identity(T))
-        # super_D = npl.solve(D@D.T, np.identity(T))
-        # super_D = np.identity(T) #!!! NEED TO SPEAK WITH ADVISOR ON THIS
-        super_D = D_1@D_1.T
-        theta = D @ theta #we save theta_tildes in the theta variable
-        theta_tab[0] = theta #we save all theta_tildes in theta_tab, including initial theta_tilde
+        theta_tab[0] = theta #we save theta in the theta_tab variable 
         for i in range(int(niter/2)):
+            theta_tilde = D@theta
             if is_subdiff:
-                mu = SubdiffImage(theta, Y, U, sh, gamma)
+                mu = SubdiffImage(theta_tilde, Y, U, sh, gamma) #SubdiffSource(theta, Y, A, D, sh, gamma)
             elif is_prox:
-                mu = DriftImage(theta, Y, U, sh, Lambda, gamma)
+                mu = DriftImage(theta_tilde, Y, U, sh, Lambda, gamma) #DriftSource(theta, Y, A, D, sh, Lambda, gamma) #
             else:
-                mu = theta
+                mu = theta_tilde        
             
             #covariance matrix changes
-            candidate = npr.multivariate_normal(mu, gamma * D@D.T)
+            candidate_tilde = npr.multivariate_normal(mu, gamma * np.identity(T)) #generates candidate_tilde
             if not is_prox:
-                log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
+                log_alpha = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda)
+                # log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - LogDistributionPi(theta, Y, A, D, sh, Lambda)
             else:
-                mu_cand = DriftImage(candidate, Y, U, sh, Lambda, gamma)
-                mu_cand    = DriftImage(candidate, Y, U, sh, Lambda, gamma)
-                logpi_cand = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) 
-                logpi      = LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
-                dist_1     = (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
-                dist_2     = (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma)
-                log_alpha  = logpi_cand - logpi - dist_1 + dist_2
+                mu_cand_tilde    = DriftImage(candidate_tilde, Y, U, sh, Lambda, gamma) #DriftSource(candidate, Y, A, D, sh, Lambda, gamma)
+                logpi_tilde_cand = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda) #LogDistributionPi(candidate, Y, A, D, sh, Lambda) 
+                logpi_tilde      = LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda) #LogDistributionPi(theta, Y, A, D, sh, Lambda) #
+                dist_1           = npl.norm(candidate_tilde - mu)**2/(2*gamma) #(candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
+                dist_2           = npl.norm(theta_tilde - mu_cand_tilde)**2/(2*gamma) #(theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma)
+                log_alpha        = logpi_tilde_cand - logpi_tilde - dist_1 + dist_2
                 
             if log_alpha >= 0 :
-                theta = candidate
+                theta = D_1@candidate_tilde
                 accept_cnt += 1
             elif rd[i] <= np.exp(log_alpha): #probability alpha of success
-                theta = candidate
+                theta = D_1@candidate_tilde
                 accept_cnt += 1
             
             theta_tab[i+1] = theta
 
             #burn-in
             if ((i+1) % 1000) == 0:
-                plt.plot(D_1@theta, "r", alpha = 2*i/niter) #for coherence we choose to plot theta
+                plt.plot(theta, "r", alpha = 2*i/niter) #for coherence we choose to plot theta
                 accept_rate = accept_cnt/1000
                 gammas.append(gamma)
                 accepts.append(accept_rate)
@@ -377,37 +367,39 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
         accepts = np.array(accepts)
 
         for i in range(end_burn_in+1,int(niter)):
+            theta_tilde = D@theta
             if is_subdiff:
-                mu = SubdiffImage(theta, Y, U, sh, gamma)
+                mu = SubdiffImage(theta_tilde, Y, U, sh, gamma)
             elif is_prox:
-                mu = DriftImage(theta, Y, U, sh, Lambda, gamma)
+                mu = DriftImage(theta_tilde, Y, U, sh, Lambda, gamma)
             else:
-                mu = theta
-
-            candidate = npr.multivariate_normal(mu, gamma * D@D.T)
+                mu = theta_tilde        
+            
+            #covariance matrix changes
+            candidate_tilde = npr.multivariate_normal(mu, gamma * np.identity(T)) #generates candidate_tilde
             if not is_prox:
-                log_alpha = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
+                log_alpha = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda)
             else:
-                mu_cand = DriftImage(candidate, Y, U, sh, Lambda, gamma)
-                logpi_cand = LogDistributionPi_tilde(candidate, Y, U, sh, Lambda) 
-                logpi      = LogDistributionPi_tilde(theta, Y, U, sh, Lambda)
-                dist_1     = (candidate - mu).T @ super_D @ (candidate - mu)/(2*gamma)
-                dist_2     = (theta - mu_cand).T @ super_D @ (theta - mu_cand)/(2*gamma)
-                log_alpha = logpi_cand - logpi - dist_1 + dist_2 
-               
+                mu_cand_tilde    = DriftImage(candidate_tilde, Y, U, sh, Lambda, gamma) 
+                logpi_tilde_cand = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda)
+                logpi_tilde      = LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda)
+                dist_1           = npl.norm(candidate_tilde - mu)**2/(2*gamma)
+                dist_2           = npl.norm(theta_tilde - mu_cand_tilde)**2/(2*gamma)
+                log_alpha        = logpi_tilde_cand - logpi_tilde - dist_1 + dist_2
+                
             if log_alpha >= 0 :
-                theta = candidate
+                theta = D_1@candidate_tilde
                 accept_cnt += 1
             elif rd[i] <= np.exp(log_alpha): #probability alpha of success
-                theta = candidate
+                theta = D_1@candidate_tilde
                 accept_cnt += 1
             
             theta_tab[i+1] = theta
-        
-        #now we need to convert the theta_tildes back to theta
-        theta_tab = (D_1 @ theta_tab.T).T
+
+    ax.plot(x, color="salmon", label="argmax")
+    ax.plot(mean, color="purple", label="theoretical mean")
     ax.legend()
-    return theta_tab, accepts, gammas, theta_tab[end_burn_in:].mean(axis=0), end_burn_in, fig
+    return theta_tab, accepts, gammas, end_burn_in, fig
 
 #Specialised One-at-a-time PGdual algorithm -> returns only table of simulations and ends of burn in
 def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_state=None):
@@ -482,16 +474,13 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
         D_1 = npl.solve(D, np.identity(T))
         theta = D @ theta
         theta_tab[0] = theta
-        # super_D = D_1@D_1.T #!!!! NEED TO SPEAK WITH ADVISOR ON THIS
-        super_D = np.identity(T)
-        
         
         for i in range(int(niter)):
             mu = DriftImage(theta, Y, U, sh, Lambda, gamma)
             candidate = npr.multivariate_normal(mu, np.diag(gamma))
             mu_cand   = DriftImage(candidate, Y, U, sh, Lambda, gamma)
 
-            log_alpha = np.apply_along_axis(LogDistributionPi_tilde, 0, candidate, Y=Y, U=U, sh=sh, Lambda=Lambda) - np.apply_along_axis(LogDistributionPi_tilde, 0, theta, Y=Y, U=U, sh=sh, Lambda=Lambda) - (theta - mu_cand) @ super_D @ (theta - mu_cand)/2*gamma + (candidate - mu) @ super_D @ (candidate - mu)/2*gamma
+            log_alpha = np.apply_along_axis(LogDistributionPi_tilde, 0, candidate, Y=Y, U=U, sh=sh, Lambda=Lambda) - np.apply_along_axis(LogDistributionPi_tilde, 0, theta, Y=Y, U=U, sh=sh, Lambda =Lambda) - (theta - mu_cand) @ super_D @ (theta - mu_cand)/2*gamma + (candidate - mu) @ super_D @ (candidate - mu)/2*gamma
 
             rd = npr.uniform(size=T)
             
