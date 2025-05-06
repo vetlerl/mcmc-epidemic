@@ -241,7 +241,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
             else:
                 mu = theta
 
-            candidate = npr.multivariate_normal(mu, gamma*np.identity(T))
+            candidate = mu + np.sqrt(gamma)*npr.normal(0,1, T) #npr.multivariate_normal(mu, gamma*np.identity(T))
             if not is_prox:
                 log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - LogDistributionPi(theta, Y, A, D, sh, Lambda)
             else:
@@ -290,7 +290,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
             else:
                 mu = theta
 
-            candidate = npr.multivariate_normal(mu, gamma*np.identity(T))
+            candidate = mu + np.sqrt(gamma)*npr.normal(0,1, T) #npr.multivariate_normal(mu, gamma*np.identity(T))
             if not is_prox:
                 log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - LogDistributionPi(theta, Y, A, D, sh, Lambda)
             else:
@@ -320,7 +320,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 mu = theta_tilde        
             
             #covariance matrix changes
-            candidate_tilde = npr.multivariate_normal(mu, gamma * np.identity(T)) #generates candidate_tilde
+            candidate_tilde = mu + np.sqrt(gamma)*npr.normal(0,1, T) #generates candidate_tilde
             if not is_prox:
                 log_alpha = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda)
                 # log_alpha = LogDistributionPi(candidate, Y, A, D, sh, Lambda) - LogDistributionPi(theta, Y, A, D, sh, Lambda)
@@ -376,7 +376,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 mu = theta_tilde        
             
             #covariance matrix changes
-            candidate_tilde = npr.multivariate_normal(mu, gamma * np.identity(T)) #generates candidate_tilde
+            candidate_tilde = mu + np.sqrt(gamma)*npr.normal(0,1, T) #generates candidate_tilde
             if not is_prox:
                 log_alpha = LogDistributionPi_tilde(candidate_tilde, Y, U, sh, Lambda) - LogDistributionPi_tilde(theta_tilde, Y, U, sh, Lambda)
             else:
