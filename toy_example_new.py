@@ -181,7 +181,7 @@ def DriftImage(theta_tilde, Y, U, sh, Lambda, gamma):
 
 
 #MetropolisHastings algorithm - returns all parameters + a plot
-def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_state=None):
+def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_state=None, pt_init=None):
     #------------- Check the method -------------# 
     source_methods = ["source", "subdiff_source", "prox_source"]
     image_methods  = ["image",  "subdiff_image",  "prox_image"]
@@ -219,20 +219,26 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     end_burn_in = None
     convergence_cnt = 0
     
-
     gammas = []
     accepts = []
-    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) #initial point
-    theta_tab = np.empty((int(niter) + 1, T))
+    #---------- pt init ----------#
+    if pt_init is None:
+        theta = np.linalg.solve(D, npr.uniform(-10, 10, T)) #initial point
+    else:
+        theta = pt_init
+    #----------------------------#
+    
+    theta_tab    = np.empty((int(niter) + 1, T))
+    theta_tab[0] = theta #we save the initial point
     fig,ax = plt.subplots(1,1)
     ax.set_ylabel("Value")
     ax.set_xlabel(r"Component of $\theta$ / time axis")
     ax.set_title(r"Burn-in of $\theta$ using method: "+str(method))
 
+    print("code was updated 4")
     #------------- Case: Source -------------#
     if is_source:
         
-        theta_tab[0] = theta #we save the initial point
         for i in range(int(niter/2)):
             if is_subdiff:
                 mu = SubdiffSource(theta, Y, A, D, sh, gamma)
@@ -270,11 +276,11 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 else:
                     convergence_cnt += 1
                     if convergence_cnt > 2e-4 * niter:
-                        end_burn_in = i + 2e-4 * niter
+                        end_burn_in = i
                         break
                 
         if end_burn_in is None:
-            end_burn_in = int(niter/2)-1
+            end_burn_in = int(niter/2)
         else:
             end_burn_in = int(end_burn_in)
         print(f"ended burn-in @ {end_burn_in:d}: {accepts[-1]-accept_final:.3f}")
@@ -282,7 +288,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
         gammas = np.array(gammas)
         accepts = np.array(accepts)
 
-        for i in range(end_burn_in+1,int(niter)):
+        for i in range(end_burn_in,int(niter)):
             if is_subdiff:
                 mu = SubdiffSource(theta, Y, A, D, sh, gamma)
             elif is_prox:
@@ -309,7 +315,6 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
     else:
 
         D_1 = npl.solve(D, np.identity(T))
-        theta_tab[0] = theta #we save theta in the theta_tab variable 
         for i in range(int(niter/2)):
             theta_tilde = D@theta
             if is_subdiff:
@@ -354,11 +359,11 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
                 else:
                     convergence_cnt += 1
                     if convergence_cnt > 2e-4 * niter:
-                        end_burn_in = i + 2e-4 * niter
+                        end_burn_in = i
                         break
                         
         if end_burn_in is None:
-            end_burn_in = int(niter/2)-1
+            end_burn_in = int(niter/2)
         else:
             end_burn_in = int(end_burn_in)
         print(f"ended burn-in @ {end_burn_in:d}: {accepts[-1]-accept_final:.3f}")
@@ -366,7 +371,7 @@ def MetropolisHastings(T, Lambda, Y, a, b, niter=1e5, method="source", random_st
         gammas = np.array(gammas)
         accepts = np.array(accepts)
 
-        for i in range(end_burn_in+1,int(niter)):
+        for i in range(end_burn_in,int(niter)):
             theta_tilde = D@theta
             if is_subdiff:
                 mu = SubdiffImage(theta_tilde, Y, U, sh, gamma)
@@ -433,7 +438,7 @@ def PGdual_One_at_a_time(T, Lambda, Y, a, b, niter=1e5, method="source", random_
     convergence_cnt = np.zeros(T)
     burn_in      = True
 
-    theta = np.linalg.solve(D, np.random.uniform(-1, 1, T)) #initial point
+    theta = np.linalg.solve(D, np.random.uniform(-10, 10, T)) #initial point
     theta_tab = np.empty((int(niter) + 1, T))
 
     #------------- Case: Source -------------#
