@@ -288,7 +288,6 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
     gammas.append(gamma)
     accepts.append(0)
     
-    
     # burn-in loop
     for i in range(int(niter/2)):
 
@@ -349,16 +348,16 @@ def MHSubdiff(T, Z, phi, lambda_R,lambda_O,niter=1e5,method="source"):
             
             logpi_candidate = log_pi(candidate, phi,Z, lambda_R, D, barsh, lambda_O,c ,C )
             dens_courant= fast_logpdf(theta, CalculSubdiff(Z,phi,candidate,A,c,lambda_R,lambda_O,barsh,gamma,Cov), gamma, eigvals, eigvecs, dim)
-            dens_candidate=fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
+            dens_candidate= fast_logpdf(candidate, mu, gamma, eigvals, eigvecs, dim)
             log_alpha = logpi_candidate - logpi_courant-dens_candidate+dens_courant
     
             if log_alpha >=0 :
                 theta = candidate
-                logpi_candidate = logpi_courant
+                logpi_courant = logpi_candidate
             else:
                 if rd[i] <= np.exp(log_alpha): # probability alpha of success
                     theta = candidate
-                    logpi_candidate = logpi_courant
+                    logpi_courant = logpi_candidate
                 
         theta_tab[i+1,:]=theta 
         if ((i+1) % 50000) == 0:
